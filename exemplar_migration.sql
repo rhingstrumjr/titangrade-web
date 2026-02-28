@@ -1,4 +1,2 @@
--- Run this in your Supabase SQL Editor to add the optional exemplar_url column
-
-ALTER TABLE assignments 
-ADD COLUMN IF NOT EXISTS exemplar_url TEXT;
+-- Add is_exemplar column to submissions table
+ALTER TABLE submissions ADD COLUMN is_exemplar BOOLEAN DEFAULT false;

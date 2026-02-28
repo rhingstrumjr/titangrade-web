@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronRight, FileText } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronRight, FileText, Download, Star } from "lucide-react";
 
 interface Submission {
   id: string;
@@ -14,6 +14,7 @@ interface Submission {
   score: string | null;
   feedback: string | null;
   status: string;
+  is_exemplar: boolean;
   created_at: string;
 }
 
@@ -89,17 +90,81 @@ export default function SubmissionsView() {
     setExpandedEmail(expandedEmail === email ? null : email);
   };
 
+  const handleDownloadCSV = () => {
+    if (studentGroups.length === 0) return;
+
+    const headers = ["Student Name", "Email", "Latest Score", "Latest Status", "Number of Drafts"];
+
+    const rows = studentGroups.map(group => [
+      `"${group.name}"`,
+      `"${group.email}"`,
+      `"${group.latestScore || ''}"`,
+      `"${group.latestStatus}"`,
+      `"${group.submissions.length}"`
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(e => e.join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `grades_${assignmentTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const toggleExemplar = async (submissionId: string, currentStatus: boolean, studentEmail: string) => {
+    const { error } = await supabase
+      .from('submissions')
+      .update({ is_exemplar: !currentStatus })
+      .eq('id', submissionId);
+
+    if (!error) {
+      // Update local state
+      setStudentGroups(prevGroups => prevGroups.map(group => {
+        if (group.email === studentEmail) {
+          return {
+            ...group,
+            submissions: group.submissions.map(sub =>
+              sub.id === submissionId ? { ...sub, is_exemplar: !currentStatus } : sub
+            )
+          };
+        }
+        return group;
+      }));
+    } else {
+      console.error("Failed to toggle exemplar", error);
+      alert("Failed to toggle exemplar status.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-8">
       <div className="max-w-6xl mx-auto space-y-8">
 
         {/* Header */}
-        <div className="pb-6 border-b border-gray-200">
-          <Link href="/teacher" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 mb-4 transition-colors">
-            <ArrowLeft size={16} className="mr-1" /> Back to Dashboard
-          </Link>
-          <h1 className="text-3xl font-extrabold text-indigo-900 tracking-tight">Submissions</h1>
-          <p className="text-gray-500 mt-1">{assignmentTitle}</p>
+        <div className="pb-6 border-b border-gray-200 flex justify-between items-end">
+          <div>
+            <Link href="/teacher" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 mb-4 transition-colors">
+              <ArrowLeft size={16} className="mr-1" /> Back to Dashboard
+            </Link>
+            <h1 className="text-3xl font-extrabold text-indigo-900 tracking-tight">Submissions</h1>
+            <p className="text-gray-500 mt-1">{assignmentTitle}</p>
+          </div>
+
+          <button
+            onClick={handleDownloadCSV}
+            disabled={studentGroups.length === 0}
+            className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+          >
+            <Download size={16} /> Export CSV
+          </button>
         </div>
 
         {loading ? (
@@ -194,9 +259,25 @@ export default function SubmissionsView() {
                                         <p className="text-yellow-600 font-medium text-xs flex items-center"><Clock size={12} className="mr-1" /> Grading in progress...</p>
                                       ) : null}
 
-                                      <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 transition-colors bg-indigo-50 px-3 py-1.5 rounded-md font-medium">
-                                        <FileText size={16} /> View Document
-                                      </a>
+                                      <div className="flex flex-col gap-2 relative z-10">
+                                        <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 text-indigo-600 hover:text-indigo-800 transition-colors bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-md font-medium text-xs">
+                                          <FileText size={14} /> View Document
+                                        </a>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleExemplar(sub.id, sub.is_exemplar, group.email);
+                                          }}
+                                          className={`flex items-center justify-center gap-1.5 transition-colors border px-3 py-1.5 rounded-md font-medium text-xs
+                                            ${sub.is_exemplar
+                                              ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                                              : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-amber-600"
+                                            }`}
+                                        >
+                                          <Star size={14} className={sub.is_exemplar ? "fill-amber-500 text-amber-500" : ""} />
+                                          {sub.is_exemplar ? "Unmark Exemplar" : "Mark as Exemplar"}
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
                                 ))}

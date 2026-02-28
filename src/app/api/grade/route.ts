@@ -47,6 +47,13 @@ export async function POST(req: Request) {
     // 2. Download all files concurrently
     const studentFiles = await Promise.all(activeFileUrls.map(fetchToBuffer));
 
+    // 2.5 Fetch Dynamic Student Exemplars
+    const { data: studentExemplars } = await supabase
+      .from('submissions')
+      .select('*')
+      .eq('assignment_id', assignment.id)
+      .eq('is_exemplar', true);
+
     let frameworkInstructions = "";
     if (grading_framework === 'marzano') {
       frameworkInstructions = `
@@ -123,6 +130,24 @@ export async function POST(req: Request) {
           ...execFileParts,
         ]
       });
+    }
+
+    if (studentExemplars && studentExemplars.length > 0) {
+      for (const ex of studentExemplars) {
+        if (!ex.file_url) continue;
+        try {
+          const exFile = await fetchToBuffer(ex.file_url);
+          aiMessages.push({
+            role: 'user',
+            content: [
+              { type: 'text', text: `TEACHER APPROVED STUDENT EXEMPLAR:\nThe following attached document is a past student submission that the teacher explicitly marked as a grading exemplar.\nThe teacher gave this submission a SCORE of: ${ex.score}\nThe teacher gave this submission FEEDBACK of: "${ex.feedback}"\nAnalyze this exemplar to understand EXACTLY how the teacher grades this assignment, and mimic this style, stringency, and feedback tone for the current student.` },
+              { type: 'file' as const, data: exFile.buffer, mediaType: exFile.mimeType },
+            ]
+          });
+        } catch (e) {
+          console.error("Failed to load student exemplar", e);
+        }
+      }
     }
 
     const { object } = await generateObject({
