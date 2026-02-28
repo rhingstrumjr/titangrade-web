@@ -5,6 +5,12 @@ import { supabase } from "@/lib/supabase";
 import { PlusCircle, Link as LinkIcon, Users, FileText, Activity, Trash2 } from "lucide-react";
 import Link from "next/link";
 
+interface Class {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
 interface Assignment {
   id: string;
   title: string;
@@ -16,11 +22,14 @@ interface Assignment {
   grading_framework: "standard" | "marzano";
   max_attempts: number;
   is_socratic: boolean;
+  class_id?: string | null;
   created_at: string;
 }
 
 export default function TeacherDashboard() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [isCreating, setIsCreating] = useState(false);
@@ -33,13 +42,29 @@ export default function TeacherDashboard() {
   const [newRubricText, setNewRubricText] = useState("");
   const [newRubricFiles, setNewRubricFiles] = useState<File[]>([]);
   const [newExemplarFiles, setNewExemplarFiles] = useState<File[]>([]);
+  const [selectedClassesForNewAssignment, setSelectedClassesForNewAssignment] = useState<string[]>([]);
   const [createLoading, setCreateLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Fetch initial assignments
+  const [isCreatingClass, setIsCreatingClass] = useState(false);
+  const [newClassName, setNewClassName] = useState("");
+
+  // Fetch initial data
   useEffect(() => {
+    fetchClasses();
     fetchAssignments();
   }, []);
+
+  const fetchClasses = async () => {
+    const { data, error } = await supabase
+      .from('classes')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (!error && data) {
+      setClasses(data);
+    }
+  };
 
   const fetchAssignments = async () => {
     setLoading(true);
@@ -127,28 +152,42 @@ export default function TeacherDashboard() {
 
     const finalScore = gradingFramework === "marzano" ? 4 : newScore;
 
+    const inserts = selectedClassesForNewAssignment.length > 0
+      ? selectedClassesForNewAssignment.map(classId => ({
+        title: newTitle,
+        max_score: finalScore,
+        rubric: finalRubricValue,
+        rubrics: finalRubricsArray.length > 0 ? finalRubricsArray : null,
+        exemplar_url: finalExemplarValue,
+        exemplar_urls: finalExemplarArray,
+        grading_framework: gradingFramework,
+        max_attempts: maxAttempts,
+        is_socratic: isSocratic,
+        class_id: classId
+      }))
+      : [{
+        title: newTitle,
+        max_score: finalScore,
+        rubric: finalRubricValue,
+        rubrics: finalRubricsArray.length > 0 ? finalRubricsArray : null,
+        exemplar_url: finalExemplarValue,
+        exemplar_urls: finalExemplarArray,
+        grading_framework: gradingFramework,
+        max_attempts: maxAttempts,
+        is_socratic: isSocratic,
+        class_id: selectedClassId // default to current tab if no explicit checkboxes checked
+      }];
+
     const { data, error } = await supabase
       .from('assignments')
-      .insert([
-        {
-          title: newTitle,
-          max_score: finalScore,
-          rubric: finalRubricValue,
-          rubrics: finalRubricsArray.length > 0 ? finalRubricsArray : null,
-          exemplar_url: finalExemplarValue,
-          exemplar_urls: finalExemplarArray,
-          grading_framework: gradingFramework,
-          max_attempts: maxAttempts,
-          is_socratic: isSocratic
-        }
-      ])
+      .insert(inserts)
       .select();
 
     if (error) {
       console.error("Error creating assignment:", error);
       alert("Failed to create assignment");
-    } else if (data && data[0]) {
-      setAssignments([data[0], ...assignments]);
+    } else if (data && data.length > 0) {
+      setAssignments([...data, ...assignments]);
       setIsCreating(false);
       setNewTitle("");
       setNewScore(100);
@@ -158,6 +197,7 @@ export default function TeacherDashboard() {
       setNewRubricText("");
       setNewRubricFiles([]);
       setNewExemplarFiles([]);
+      setSelectedClassesForNewAssignment([]);
     }
     setCreateLoading(false);
   };
@@ -185,6 +225,30 @@ export default function TeacherDashboard() {
     }
     setDeletingId(null);
   };
+
+  const handleCreateClass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClassName.trim()) return;
+
+    const { data, error } = await supabase
+      .from('classes')
+      .insert([{ name: newClassName.trim() }])
+      .select();
+
+    if (!error && data && data[0]) {
+      setClasses([...classes, data[0]]);
+      setNewClassName("");
+      setIsCreatingClass(false);
+      setSelectedClassId(data[0].id);
+    } else {
+      console.error(error);
+      alert("Failed to create class.");
+    }
+  };
+
+  const displayedAssignments = selectedClassId
+    ? assignments.filter(a => a.class_id === selectedClassId)
+    : assignments;
 
   const copyToClipboard = (id: string) => {
     if (typeof window !== "undefined") {
@@ -265,6 +329,31 @@ export default function TeacherDashboard() {
                   />
                   <p className="text-xs text-gray-500 mt-1">Allowed drafts</p>
                 </div>
+
+                {classes.length > 0 && (
+                  <div className="md:col-span-4 p-4 border border-gray-200 rounded-lg">
+                    <label className="block text-sm font-semibold mb-2">Assign to Classes</label>
+                    <div className="flex flex-wrap gap-3">
+                      {classes.map(cls => (
+                        <label key={cls.id} className="flex items-center space-x-2 text-sm bg-white border border-gray-300 px-3 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedClassesForNewAssignment.includes(cls.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedClassesForNewAssignment([...selectedClassesForNewAssignment, cls.id]);
+                              } else {
+                                setSelectedClassesForNewAssignment(selectedClassesForNewAssignment.filter(id => id !== cls.id));
+                              }
+                            }}
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          />
+                          <span className="font-medium text-gray-700">{cls.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="md:col-span-4 flex items-center p-4 bg-indigo-50 border border-indigo-100 rounded-lg">
                   <input
@@ -381,17 +470,63 @@ export default function TeacherDashboard() {
           </div>
         )}
 
-        {/* Assignment List */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold">Your Assignments</h2>
+        {/* Class Navigation & Assignment List */}
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex bg-gray-100 p-1 rounded-lg overflow-x-auto border border-gray-200">
+              <button
+                onClick={() => setSelectedClassId(null)}
+                className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors ${selectedClassId === null ? "bg-white shadow-sm text-indigo-700" : "text-gray-600 hover:text-gray-900"}`}
+              >
+                All Classes
+              </button>
+              {classes.map(cls => (
+                <button
+                  key={cls.id}
+                  onClick={() => setSelectedClassId(cls.id)}
+                  className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors ${selectedClassId === cls.id ? "bg-white shadow-sm text-indigo-700" : "text-gray-600 hover:text-gray-900"}`}
+                >
+                  {cls.name}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setIsCreatingClass(!isCreatingClass)}
+              className="text-sm flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-medium whitespace-nowrap bg-indigo-50 px-3 py-1.5 rounded-full"
+            >
+              <PlusCircle size={16} /> Add Class
+            </button>
+          </div>
+
+          {isCreatingClass && (
+            <div className="bg-white p-4 border border-gray-200 rounded-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-2 shadow-sm">
+              <input
+                type="text"
+                autoFocus
+                value={newClassName}
+                onChange={(e) => setNewClassName(e.target.value)}
+                placeholder="e.g. Period 1 Biology"
+                className="flex-grow border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateClass(e as any)}
+              />
+              <button onClick={handleCreateClass} className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors">Save</button>
+              <button onClick={() => setIsCreatingClass(false)} className="text-gray-500 hover:text-gray-700 text-sm font-medium">Cancel</button>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold">
+              {selectedClassId ? classes.find(c => c.id === selectedClassId)?.name : "All Assignments"}
+            </h2>
+          </div>
 
           {loading ? (
             <div className="text-center py-12 text-gray-500">Loading assignments...</div>
-          ) : assignments.length === 0 ? (
+          ) : displayedAssignments.length === 0 ? (
             <div className="bg-white border border-gray-200 rounded-xl p-12 text-center shadow-sm">
               <FileText className="mx-auto h-12 w-12 text-gray-400 mb-3" />
-              <h3 className="text-lg font-medium text-gray-900">No assignments yet</h3>
-              <p className="text-gray-500 mb-4">Create your first assignment to start accepting submissions.</p>
+              <h3 className="text-lg font-medium text-gray-900">No assignments found</h3>
+              <p className="text-gray-500 mb-4">Create your first assignment for this class to start accepting submissions.</p>
               <button
                 onClick={() => setIsCreating(true)}
                 className="text-indigo-600 hover:text-indigo-800 font-medium"
@@ -401,7 +536,7 @@ export default function TeacherDashboard() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {assignments.map((assignment) => (
+              {displayedAssignments.map((assignment) => (
                 <div key={assignment.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
                   <div className="p-6 flex-grow">
                     <div className="flex justify-between items-start mb-2">
