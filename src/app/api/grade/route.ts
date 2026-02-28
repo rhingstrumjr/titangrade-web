@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     }
 
     const { file_url, file_urls, student_email, student_name, assignment } = submission;
-    const { rubric, rubrics, max_score, title, grading_framework, exemplar_url, exemplar_urls } = assignment;
+    const { rubric, rubrics, max_score, title, grading_framework, exemplar_url, exemplar_urls, is_socratic } = assignment;
 
     // Use array if provided, fallback to standard field
     const activeFileUrls = file_urls && file_urls.length > 0 ? file_urls : [file_url];
@@ -61,6 +61,13 @@ export async function POST(req: Request) {
       `;
     }
 
+    const socraticInstructions = is_socratic ? `
+    🚨 CRITICAL SOCRATIC TUTOR DIRECTIVE 🚨
+    The teacher has enabled Socratic Tutor Mode. YOU MUST NEVER REVEAL THE CORRECT ANSWER DIRECTLY if the student got it wrong.
+    Instead of stating the correct answer or explicitly correcting them, you must ask a guiding question, point out a logical flaw, or refer them back to a specific concept to help them realize their own mistake. 
+    Your feedback must act like a 1-on-1 tutor guiding them to the 'aha' moment. Focus heavily on 'What did they confuse?' and 'How can I gently nudge them?'
+    ` : ``;
+
     // 3. Call Gemini 2.5 Flash for Grading
     let systemPrompt = `You are an elite, encouraging Science Teacher grading a student's assignment titled "${title}".
     Your job:
@@ -76,6 +83,7 @@ export async function POST(req: Request) {
     - Never guess what the student "meant" to circle. Only grade the markings physically present on the page.
     - If comparing to an Exemplar, do a direct matching: Student Answer vs Exemplar Answer.
     - Quote the exact text the student wrote when evaluating their reasoning.
+    ${socraticInstructions}
     
     ${frameworkInstructions}
     

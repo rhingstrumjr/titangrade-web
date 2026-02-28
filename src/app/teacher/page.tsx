@@ -15,6 +15,7 @@ interface Assignment {
   exemplar_urls?: string[];
   grading_framework: "standard" | "marzano";
   max_attempts: number;
+  is_socratic: boolean;
   created_at: string;
 }
 
@@ -27,6 +28,7 @@ export default function TeacherDashboard() {
   const [gradingFramework, setGradingFramework] = useState<"standard" | "marzano">("standard");
   const [newScore, setNewScore] = useState(100);
   const [maxAttempts, setMaxAttempts] = useState(1);
+  const [isSocratic, setIsSocratic] = useState(false);
   const [rubricType, setRubricType] = useState<"text" | "file">("text");
   const [newRubricText, setNewRubricText] = useState("");
   const [newRubricFiles, setNewRubricFiles] = useState<File[]>([]);
@@ -136,7 +138,8 @@ export default function TeacherDashboard() {
           exemplar_url: finalExemplarValue,
           exemplar_urls: finalExemplarArray,
           grading_framework: gradingFramework,
-          max_attempts: maxAttempts
+          max_attempts: maxAttempts,
+          is_socratic: isSocratic
         }
       ])
       .select();
@@ -150,6 +153,7 @@ export default function TeacherDashboard() {
       setNewTitle("");
       setNewScore(100);
       setMaxAttempts(1);
+      setIsSocratic(false);
       setGradingFramework("standard");
       setNewRubricText("");
       setNewRubricFiles([]);
@@ -260,6 +264,24 @@ export default function TeacherDashboard() {
                     className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                   <p className="text-xs text-gray-500 mt-1">Allowed drafts</p>
+                </div>
+
+                <div className="md:col-span-4 flex items-center p-4 bg-indigo-50 border border-indigo-100 rounded-lg">
+                  <input
+                    id="socratic-toggle"
+                    type="checkbox"
+                    checked={isSocratic}
+                    onChange={(e) => setIsSocratic(e.target.checked)}
+                    className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <div className="ml-3">
+                    <label htmlFor="socratic-toggle" className="font-semibold text-indigo-900 cursor-pointer text-sm">
+                      Enable Socratic Tutor Mode
+                    </label>
+                    <p className="text-xs text-indigo-700 mt-0.5">
+                      The AI will never reveal the correct answer directly. Instead, it will guide the student to find the answer themselves through questions and hints.
+                    </p>
+                  </div>
                 </div>
               </div>
 
