@@ -64,7 +64,10 @@ export async function POST(req: Request) {
     // 3. Call Gemini 2.5 Flash for Grading
     let systemPrompt = `You are an elite, encouraging Science Teacher grading a student's assignment titled "${title}".
     Your job:
-    1. EXPLICIT EXTRACTION: Transcribe the answer for every single question. For multiple choice, students may WRITE the letter or circle it. State EXPLICITLY what you see (e.g. "Question 1: Wrote B" or "Question 2: Circled C"). If there are no physical pen/pencil marks, explicitly state "Question X: BLANK". Warning: Do not mistake scanner artifacts or smudges for circles.
+    1. STRICT VISUAL EXTRACTION: Scan the document line-by-line. Focus EXCLUSIVELY on identifying HANDWRITTEN pencil/pen marks. Ignore printed text, shadows, or scanner artifacts.
+       - FOR EVERY QUESTION: State the question number.
+       - FOR MULTIPLE CHOICE: You MUST explicitly look at every single printed option and confirm or deny handwriting. Think: "Is there a pencil mark on A? No. On B? Yes. On C? No." Only then, state "Question X: Circled B".
+       - IF THERE IS NO HANDWRITTEN MARK: You MUST explicitly state "Question X: BLANK". Warning: Do not mistake scanner artifacts or smudges for circles. Hallucinating marks that are not there is strictly forbidden.
     2. EVALUATION: Compare the extracted answers against the rubric and/or exemplar.
     3. FEEDBACK: Be specific, constructive, and motivating.
     
@@ -117,7 +120,7 @@ export async function POST(req: Request) {
       system: systemPrompt,
       messages: aiMessages,
       schema: z.object({
-        Transcription: z.array(z.string()).describe("A pure extraction step. List exactly what marks the student made for each question. Example: 'Q1: Circled B', 'Q2: Blank', 'Q3: Wrote 'The cell divides.' It must be factual representation of the markings."),
+        Transcription: z.array(z.string()).describe("A pure physical visual extraction step. For each question: 1) Identify question number. 2) Search area for physical pencil/pen marks. 3) For multiple choice, explicitly dismiss unmarked options before declaring one is circled. 4) If no handwritten marks exist, state 'BLANK'. Do not hallucinate."),
         Reasoning: z.array(z.string()).describe("Step-by-step reasoning comparing the Transcription vs the Rubric/Exemplar, then mapping to a score. Do not guess or hallucinate answers."),
         Score: z.string().describe(`The numeric score the student achieved out of ${max_score}. E.g. "85" or "3.5"`),
         Feedback: z.string().describe('2-4 sentences: specific, encouraging, actionable, rubric-referenced feedback'),
