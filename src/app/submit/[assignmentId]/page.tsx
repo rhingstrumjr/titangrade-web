@@ -13,6 +13,7 @@ export default function SubmitPage() {
   const [maxAttempts, setMaxAttempts] = useState(1);
   const [loading, setLoading] = useState(true);
 
+  const [classId, setClassId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -21,13 +22,14 @@ export default function SubmitPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [submissionsUsed, setSubmissionsUsed] = useState<number | null>(null);
   const [checkingLimit, setCheckingLimit] = useState(false);
+  const [rosterError, setRosterError] = useState("");
 
   useEffect(() => {
     async function fetchAssignment() {
       if (!assignmentId) return;
       const { data, error } = await supabase
         .from('assignments')
-        .select('title, max_attempts')
+        .select('title, max_attempts, class_id')
         .eq('id', assignmentId)
         .single();
 
@@ -36,19 +38,48 @@ export default function SubmitPage() {
       } else {
         setAssignmentName(data.title);
         setMaxAttempts(data.max_attempts || 1);
+        setClassId(data.class_id);
       }
       setLoading(false);
     }
     fetchAssignment();
   }, [assignmentId]);
 
-  const checkSubmissionLimit = async (emailToCheck: string) => {
+  const validateStudentAndLimit = async (emailToCheck: string) => {
     if (!emailToCheck || !emailToCheck.includes('@')) {
       setSubmissionsUsed(null);
+      setName("");
+      setRosterError("");
       return;
     }
 
     setCheckingLimit(true);
+    setRosterError("");
+    setName("");
+
+    // 1. Validate against Roster table
+    if (classId) {
+      const { data: rosterData } = await supabase
+        .from('roster_students')
+        .select('name')
+        .eq('class_id', classId)
+        .ilike('email', emailToCheck)
+        .maybeSingle();
+
+      if (!rosterData) {
+        setRosterError("This email is not on the roster for this class. Please verify your spelling.");
+        setSubmissionsUsed(null);
+        setCheckingLimit(false);
+        return; // Halt here, they cannot submit.
+      }
+
+      setName(rosterData.name);
+    } else {
+      // Fallback for legacy assignments with no class created
+      setName(emailToCheck.split('@')[0]);
+    }
+
+    // 2. Check Submission Limit
     const { count, error } = await supabase
       .from('submissions')
       .select('*', { count: 'exact', head: true })
@@ -136,7 +167,8 @@ export default function SubmitPage() {
 
       setSubmitStatus("success");
 
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as Error;
       console.error(err);
       setErrorMessage(err.message || "An unexpected error occurred");
       setSubmitStatus("error");
@@ -172,45 +204,44 @@ export default function SubmitPage() {
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  disabled={submitStatus === "uploading" || submitStatus === "grading"}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder="John Doe"
-                />
-              </div>
-
-              <div>
                 <label className="block text-sm font-medium text-gray-700">Student Email</label>
                 <input
                   type="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onBlur={(e) => checkSubmissionLimit(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setRosterError(""); // clear error on typing
+                  }}
+                  onBlur={(e) => validateStudentAndLimit(e.target.value)}
                   disabled={submitStatus === "uploading" || submitStatus === "grading"}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className={`mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none sm:text-sm ${rosterError ? "border-red-300 focus:ring-red-500 focus:border-red-500" : "border-gray-300 focus:ring-indigo-500 focus:border-indigo-500"}`}
                   placeholder="johndoe@student.edu"
                 />
-                <div className="mt-2 min-h-[20px]">
+
+                {/* Dynamic Feedback Area */}
+                <div className="mt-2 text-sm min-h-[40px]">
                   {checkingLimit ? (
-                    <p className="text-xs text-gray-500">Checking submission limit...</p>
-                  ) : submissionsUsed !== null ? (
-                    submissionsUsed >= maxAttempts ? (
-                      <p className="text-sm font-semibold text-red-600">
-                        You have reached the maximum number of submissions ({maxAttempts}) for this assignment.
-                      </p>
-                    ) : (
-                      <p className="text-sm font-semibold text-emerald-600">
-                        You have {maxAttempts - submissionsUsed} remaining submission{maxAttempts - submissionsUsed !== 1 ? 's' : ''} until your grade is final.
-                      </p>
-                    )
+                    <p className="text-gray-500">Verifying...</p>
+                  ) : rosterError ? (
+                    <p className="font-semibold text-red-600">{rosterError}</p>
+                  ) : name ? (
+                    <div className="space-y-1">
+                      <p className="font-semibold text-indigo-600">Welcome, {name}!</p>
+                      {submissionsUsed !== null && (
+                        submissionsUsed >= maxAttempts ? (
+                          <p className="font-semibold text-red-600">
+                            You have reached the maximum number of submissions ({maxAttempts}).
+                          </p>
+                        ) : (
+                          <p className="font-semibold text-emerald-600">
+                            You have {maxAttempts - submissionsUsed} remaining submission{maxAttempts - submissionsUsed !== 1 ? 's' : ''} until your grade is final.
+                          </p>
+                        )
+                      )}
+                    </div>
                   ) : (
-                    <p className="text-xs text-gray-500">Make sure this is correct, as your feedback will be emailed here.</p>
+                    <p className="text-xs text-gray-500">Type your email to verify your enrollment.</p>
                   )}
                 </div>
               </div>
@@ -251,7 +282,7 @@ export default function SubmitPage() {
             <div>
               <button
                 type="submit"
-                disabled={submitStatus === "uploading" || submitStatus === "grading" || files.length === 0 || !name || !email || (submissionsUsed !== null && submissionsUsed >= maxAttempts) || checkingLimit}
+                disabled={submitStatus === "uploading" || submitStatus === "grading" || files.length === 0 || !name || !!rosterError || (submissionsUsed !== null && submissionsUsed >= maxAttempts) || checkingLimit}
                 className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
               >
                 {submitStatus === "idle" || submitStatus === "error" ? "Submit Assignment"

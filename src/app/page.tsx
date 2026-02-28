@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 
 export default function Home() {
   return (
@@ -98,7 +97,7 @@ export default function Home() {
                   <div className="text-[10px] uppercase font-bold text-gray-400 tracking-widest">Transcription</div>
                   <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
                     <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-                    "Question 1: Circled B"
+                    &quot;Question 1: Circled B&quot;
                   </div>
                 </div>
                 <div className="text-4xl font-black text-gray-900 tracking-tighter italic">3.5 / 4.0</div>

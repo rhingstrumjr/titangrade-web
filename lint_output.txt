@@ -1,0 +1,79 @@
+
+C:\Users\rhing\.gemini\antigravity\scratch\titangrade-web\src\app\submit\[assignmentId]\page.tsx
+  170:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\rhing\.gemini\antigravity\scratch\titangrade-web\src\app\teacher\page.tsx
+    5:57  warning  'Activity' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+   67:5   error    Error: Cannot access variable before it is declared
+
+`fetchClasses` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+C:\Users\rhing\.gemini\antigravity\scratch\titangrade-web\src\app\teacher\page.tsx:67:5
+  65 |   // Fetch initial data
+  66 |   useEffect(() => {
+> 67 |     fetchClasses();
+     |     ^^^^^^^^^^^^ `fetchClasses` accessed before it is declared
+  68 |     fetchAssignments();
+  69 |   }, []);
+  70 |
+
+C:\Users\rhing\.gemini\antigravity\scratch\titangrade-web\src\app\teacher\page.tsx:71:3
+  69 |   }, []);
+  70 |
+> 71 |   const fetchClasses = async () => {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 72 |     const { data, error } = await supabase
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 73 |       .from('classes')
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 74 |       .select('*')
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 75 |       .order('created_at', { ascending: true });
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 76 |
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 77 |     if (!error && data) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 78 |       setClasses(data);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 79 |     }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 80 |   };
+     | ^^^^^ `fetchClasses` is declared here
+  81 |
+  82 |   const fetchAssignments = async () => {
+  83 |     setLoading(true);  react-hooks/immutability
+   68:5   error    Error: Cannot access variable before it is declared
+
+`fetchAssignments` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+C:\Users\rhing\.gemini\antigravity\scratch\titangrade-web\src\app\teacher\page.tsx:68:5
+  66 |   useEffect(() => {
+  67 |     fetchClasses();
+> 68 |     fetchAssignments();
+     |     ^^^^^^^^^^^^^^^^ `fetchAssignments` accessed before it is declared
+  69 |   }, []);
+  70 |
+  71 |   const fetchClasses = async () => {
+
+C:\Users\rhing\.gemini\antigravity\scratch\titangrade-web\src\app\teacher\page.tsx:82:3
+  80 |   };
+  81 |
+> 82 |   const fetchAssignments = async () => {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 83 |     setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^
+> 84 |     const { data, error } = await supabase
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^
+> 94 |     setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^
+> 95 |   };
+     | ^^^^^ `fetchAssignments` is declared here
+  96 |
+  97 |   const handleCreateAssignment = async (e: React.FormEvent) => {
+  98 |     e.preventDefault();                                                                                                                                                                                                                                                                                                                                                                                                   react-hooks/immutability
+  581:79  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-explicit-any
+
+✖ 5 problems (4 errors, 1 warning)
+

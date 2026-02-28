@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     ` : ``;
 
     // 3. Call Gemini 2.5 Flash for Grading
-    let systemPrompt = `You are an elite, encouraging Science Teacher grading a student's assignment titled "${title}".
+    const systemPrompt = `You are an elite, encouraging Science Teacher grading a student's assignment titled "${title}".
     Your job:
     1. STRICT VISUAL EXTRACTION (Context-Aware): Scan the document line-by-line. If an Exemplar Answer Key is provided, you MUST look at what the correct answer is first to establish context for what messy handwriting might say (e.g., if the key says 'Arsenic', use that context to decipher a scribbled word). 
        - FOR EVERY QUESTION: State the question number.
@@ -97,6 +97,7 @@ export async function POST(req: Request) {
       mediaType: sf.mimeType,
     }));
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const aiMessages: any[] = [
       {
         role: 'user',
@@ -192,14 +193,16 @@ export async function POST(req: Request) {
           </div>
         `,
       });
-    } catch (emailErr) {
-      console.error('Failed to send email:', emailErr);
+    } catch (emailErr: unknown) {
+      const err = emailErr as Error;
+      console.error('Failed to send email:', err);
     }
 
     return NextResponse.json({ success: true, score: aiScore });
 
-  } catch (error: any) {
-    console.error('Grading API Error:', error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error('Grading API Error:', err);
 
     // Update status to error if something failed hard
     try {
@@ -207,8 +210,10 @@ export async function POST(req: Request) {
       if (submissionId) {
         await supabase.from('submissions').update({ status: 'error' }).eq('id', submissionId);
       }
-    } catch (e) { }
+    } catch {
+      // Ignored
+    }
 
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
   }
 }

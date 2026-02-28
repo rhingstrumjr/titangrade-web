@@ -2,13 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { PlusCircle, Link as LinkIcon, Users, FileText, Activity, Trash2 } from "lucide-react";
+import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon } from "lucide-react";
 import Link from "next/link";
 
 interface Class {
   id: string;
   name: string;
   created_at: string;
+}
+
+interface RosterStudent {
+  id: string;
+  name: string;
+  email: string;
+  class_id: string;
 }
 
 interface Assignment {
@@ -49,11 +56,13 @@ export default function TeacherDashboard() {
   const [isCreatingClass, setIsCreatingClass] = useState(false);
   const [newClassName, setNewClassName] = useState("");
 
-  // Fetch initial data
-  useEffect(() => {
-    fetchClasses();
-    fetchAssignments();
-  }, []);
+  // Roster state
+  const [isManagingRoster, setIsManagingRoster] = useState(false);
+  const [classRoster, setClassRoster] = useState<RosterStudent[]>([]);
+  const [rosterText, setRosterText] = useState("");
+  const [singleStudentName, setSingleStudentName] = useState("");
+  const [singleStudentEmail, setSingleStudentEmail] = useState("");
+  const [savingRoster, setSavingRoster] = useState(false);
 
   const fetchClasses = async () => {
     const { data, error } = await supabase
@@ -67,7 +76,6 @@ export default function TeacherDashboard() {
   };
 
   const fetchAssignments = async () => {
-    setLoading(true);
     const { data, error } = await supabase
       .from('assignments')
       .select('*')
@@ -80,6 +88,14 @@ export default function TeacherDashboard() {
     }
     setLoading(false);
   };
+
+  // Fetch initial data
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchClasses();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchAssignments();
+  }, []);
 
   const handleCreateAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,6 +259,107 @@ export default function TeacherDashboard() {
     } else {
       console.error(error);
       alert("Failed to create class.");
+    }
+  };
+
+  const handleOpenRoster = (classId: string) => {
+    setSelectedClassId(classId);
+    fetchRoster(classId);
+    setIsManagingRoster(true);
+  };
+
+  const fetchRoster = async (classId: string) => {
+    const { data, error } = await supabase
+      .from('roster_students')
+      .select('*')
+      .eq('class_id', classId)
+      .order('name');
+    if (!error && data) {
+      setClassRoster(data);
+    }
+  };
+
+  const handleSaveRoster = async () => {
+    if (!selectedClassId) return;
+    setSavingRoster(true);
+
+    // Parse bulk text (Name, Email separated by tab or comma)
+    const lines = rosterText.split('\n');
+    const newStudents = lines.map(line => {
+      const parts = line.split(/[\t,]/).map(p => p.trim());
+      if (parts.length >= 2 && parts[1].includes('@')) {
+        return {
+          class_id: selectedClassId,
+          name: parts[0],
+          email: parts[1]
+        };
+      }
+      return null;
+    }).filter(s => s !== null);
+
+    if (newStudents.length > 0) {
+      const { error } = await supabase
+        .from('roster_students')
+        .insert(newStudents);
+
+      if (!error) {
+        setRosterText("");
+        fetchRoster(selectedClassId);
+      } else {
+        alert("Failed to import roster. Check format.");
+      }
+    }
+    setSavingRoster(false);
+  };
+
+  const handleDeleteStudent = async (studentId: string) => {
+    if (!confirm("Are you sure you want to remove this student from the roster?")) return;
+    const { error } = await supabase.from('roster_students').delete().eq('id', studentId);
+    if (!error) {
+      setClassRoster(classRoster.filter(s => s.id !== studentId));
+    }
+  };
+
+  const handleAddSingleStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClassId || !singleStudentName.trim() || !singleStudentEmail.trim() || !singleStudentEmail.includes("@")) return;
+
+    setSavingRoster(true);
+    const { error } = await supabase
+      .from('roster_students')
+      .insert([{
+        class_id: selectedClassId,
+        name: singleStudentName.trim(),
+        email: singleStudentEmail.trim()
+      }]);
+
+    if (!error) {
+      setSingleStudentName("");
+      setSingleStudentEmail("");
+      fetchRoster(selectedClassId);
+    } else {
+      alert("Failed to add student. Ensure email is correct and not already added.");
+    }
+    setSavingRoster(false);
+  };
+
+  const handleDeleteClass = async () => {
+    if (!selectedClassId) return;
+    if (!confirm("Are you sure you want to delete this CLASS completely? This will delete all its roster students. (Assignments will NOT be deleted, but they will lose their class tag).")) return;
+
+    // First clear out the assignments pointing to this class
+    await supabase.from('assignments').update({ class_id: null }).eq('class_id', selectedClassId);
+
+    // Roster is likely cascade deleted, but delete just to be safe
+    await supabase.from('roster_students').delete().eq('class_id', selectedClassId);
+
+    const { error } = await supabase.from('classes').delete().eq('id', selectedClassId);
+    if (!error) {
+      setClasses(classes.filter(c => c.id !== selectedClassId));
+      setIsManagingRoster(false);
+      setSelectedClassId(null);
+    } else {
+      alert("Failed to delete class.");
     }
   };
 
@@ -507,7 +624,7 @@ export default function TeacherDashboard() {
                 onChange={(e) => setNewClassName(e.target.value)}
                 placeholder="e.g. Period 1 Biology"
                 className="flex-grow border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                onKeyDown={(e) => e.key === 'Enter' && handleCreateClass(e as any)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateClass(e as unknown as React.FormEvent)}
               />
               <button onClick={handleCreateClass} className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors">Save</button>
               <button onClick={() => setIsCreatingClass(false)} className="text-gray-500 hover:text-gray-700 text-sm font-medium">Cancel</button>
@@ -515,9 +632,19 @@ export default function TeacherDashboard() {
           )}
 
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold">
-              {selectedClassId ? classes.find(c => c.id === selectedClassId)?.name : "All Assignments"}
-            </h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-xl font-bold">
+                {selectedClassId ? classes.find(c => c.id === selectedClassId)?.name : "All Assignments"}
+              </h2>
+              {selectedClassId && (
+                <button
+                  onClick={() => handleOpenRoster(selectedClassId)}
+                  className="text-sm border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-md font-medium transition-colors flex items-center gap-1.5"
+                >
+                  <Users size={16} /> Manage Roster
+                </button>
+              )}
+            </div>
           </div>
 
           {loading ? (
@@ -594,6 +721,119 @@ export default function TeacherDashboard() {
         </div>
 
       </div>
+
+      {/* Roster Management Modal */}
+      {isManagingRoster && selectedClassId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-3">
+                Class Roster: {classes.find(c => c.id === selectedClassId)?.name}
+                <button
+                  onClick={handleDeleteClass}
+                  className="text-xs bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 px-2 py-1 rounded flex items-center transition-colors"
+                  title="Delete Class completely"
+                >
+                  <Trash2 size={12} className="mr-1" /> Delete Class
+                </button>
+              </h3>
+              <button onClick={() => setIsManagingRoster(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-grow space-y-6">
+
+              {/* Add Single Student Area */}
+              <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                <h4 className="font-semibold text-gray-900 mb-3">Add Single Student</h4>
+                <form onSubmit={handleAddSingleStudent} className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="text"
+                    required
+                    value={singleStudentName}
+                    onChange={(e) => setSingleStudentName(e.target.value)}
+                    placeholder="Full Name"
+                    className="flex-grow border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <input
+                    type="email"
+                    required
+                    value={singleStudentEmail}
+                    onChange={(e) => setSingleStudentEmail(e.target.value)}
+                    placeholder="Student Email"
+                    className="flex-grow border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={savingRoster}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 transition-colors shrink-0"
+                  >
+                    Add User
+                  </button>
+                </form>
+              </div>
+
+              {/* Add Students Area */}
+              <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                <h4 className="font-semibold text-indigo-900 mb-2">Bulk Import Students</h4>
+                <p className="text-sm text-indigo-700 mb-3">
+                  Paste a list of names and emails from your gradebook (spreadsheets/CSV). Ensure the format is <strong>Name, Email</strong> or separated by tabs.
+                </p>
+                <textarea
+                  value={rosterText}
+                  onChange={(e) => setRosterText(e.target.value)}
+                  placeholder="John Doe, jdoe@school.org&#nJane Smith    jane.smith@school.org"
+                  className="w-full border border-gray-300 rounded-md p-3 text-sm focus:ring-2 focus:ring-indigo-500 min-h-[120px]"
+                />
+                <div className="mt-3 flex justify-end">
+                  <button
+                    onClick={handleSaveRoster}
+                    disabled={savingRoster || !rosterText.trim()}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 transition-colors"
+                  >
+                    {savingRoster ? "Importing..." : "Import Roster"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Roster List */}
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">Enrolled Students ({classRoster.length})</h4>
+                {classRoster.length === 0 ? (
+                  <p className="text-sm text-gray-500 italic">No students added to this roster yet.</p>
+                ) : (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-medium">Name</th>
+                          <th className="px-4 py-2 text-left font-medium">Email</th>
+                          <th className="px-4 py-2 text-right font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {classRoster.map(s => (
+                          <tr key={s.id} className="text-sm">
+                            <td className="px-4 py-2 font-medium text-gray-900">{s.name}</td>
+                            <td className="px-4 py-2 text-gray-500">{s.email}</td>
+                            <td className="px-4 py-2 text-right">
+                              <button onClick={() => handleDeleteStudent(s.id)} className="text-red-500 hover:text-red-700" title="Remove student">
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
