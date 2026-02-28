@@ -14,7 +14,7 @@ export default function SubmitPage() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
 
   const [submitStatus, setSubmitStatus] = useState<"idle" | "uploading" | "grading" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -39,37 +39,40 @@ export default function SubmitPage() {
   }, [assignmentId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
+    if (e.target.files) {
+      setFiles(Array.from(e.target.files));
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file || !name || !email) return;
+    if (files.length === 0 || !name || !email) return;
 
     setSubmitStatus("uploading");
 
     try {
-      // 1. Upload File to Supabase Storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}_${name.replace(/\s+/g, '_')}.${fileExt}`;
-      const filePath = `${assignmentId}/${fileName}`;
+      // 1. Upload Files to Supabase Storage
+      const uploadPromises = files.map(async (f) => {
+        const fileExt = f.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}_${name.replace(/\s+/g, '_')}.${fileExt}`;
+        const filePath = `${assignmentId}/${fileName}`;
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('submissions')
-        .upload(filePath, file);
+        const { error: uploadError } = await supabase.storage
+          .from('submissions')
+          .upload(filePath, f);
 
-      if (uploadError) {
-        throw new Error(`File upload failed: ${uploadError.message}`);
-      }
+        if (uploadError) {
+          throw new Error(`File upload failed: ${uploadError.message}`);
+        }
 
-      // Get the Public URL of the uploaded file
-      const { data: publicUrlData } = supabase.storage
-        .from('submissions')
-        .getPublicUrl(filePath);
+        const { data: publicUrlData } = supabase.storage
+          .from('submissions')
+          .getPublicUrl(filePath);
 
-      const fileUrl = publicUrlData.publicUrl;
+        return publicUrlData.publicUrl;
+      });
+
+      const fileUrls = await Promise.all(uploadPromises);
 
       // 2. Create Submission Record in DB
       const { data: submissionData, error: dbError } = await supabase
@@ -79,7 +82,8 @@ export default function SubmitPage() {
             assignment_id: assignmentId,
             student_email: email,
             student_name: name,
-            file_url: fileUrl,
+            file_url: fileUrls[0], // backward compatibility
+            file_urls: fileUrls,
             status: 'pending'
           }
         ])
@@ -177,19 +181,20 @@ export default function SubmitPage() {
                     <UploadCloud className="mx-auto h-10 w-10 text-gray-400" />
                     <div className="flex text-sm text-gray-600 justify-center">
                       <label className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500 px-2 py-1">
-                        <span>Upload a file</span>
+                        <span>Upload one or more files</span>
                         <input
                           type="file"
                           className="sr-only"
                           required
+                          multiple
                           accept=".pdf, .png, .jpg, .jpeg"
                           onChange={handleFileChange}
                           disabled={submitStatus === "uploading" || submitStatus === "grading"}
                         />
                       </label>
                     </div>
-                    <p className="text-xs text-gray-500 hidden sm:block">PDF, PNG, JPG up to 10MB</p>
-                    {file && <p className="text-sm font-semibold text-indigo-900 mt-2">{file.name}</p>}
+                    <p className="text-xs text-gray-500 hidden sm:block">PDF, PNG, JPG supported</p>
+                    {files.length > 0 && <p className="text-sm font-semibold text-indigo-900 mt-2">{files.length} file(s) selected</p>}
                   </div>
                 </div>
               </div>
@@ -205,7 +210,7 @@ export default function SubmitPage() {
             <div>
               <button
                 type="submit"
-                disabled={submitStatus === "uploading" || submitStatus === "grading" || !file || !name || !email}
+                disabled={submitStatus === "uploading" || submitStatus === "grading" || files.length === 0 || !name || !email}
                 className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
               >
                 {submitStatus === "idle" || submitStatus === "error" ? "Submit Assignment"

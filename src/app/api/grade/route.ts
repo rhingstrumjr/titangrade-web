@@ -26,17 +26,26 @@ export async function POST(req: Request) {
       throw new Error('Submission not found');
     }
 
-    const { file_url, student_email, student_name, assignment } = submission;
-    const { rubric, max_score, title, grading_framework, exemplar_url } = assignment;
+    const { file_url, file_urls, student_email, student_name, assignment } = submission;
+    const { rubric, rubrics, max_score, title, grading_framework, exemplar_url, exemplar_urls } = assignment;
 
-    // 2. Download the file from Supabase public URL
-    const fileResponse = await fetch(file_url);
-    if (!fileResponse.ok) {
-      throw new Error('Failed to fetch the uploaded file for grading');
-    }
-    const arrayBuffer = await fileResponse.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const mimeType = fileResponse.headers.get('content-type') || 'application/pdf';
+    // Use array if provided, fallback to standard field
+    const activeFileUrls = file_urls && file_urls.length > 0 ? file_urls : [file_url];
+    const activeRubrics = rubrics && rubrics.length > 0 ? rubrics : [rubric];
+    const activeExemplars = exemplar_urls && exemplar_urls.length > 0 ? exemplar_urls : (exemplar_url ? [exemplar_url] : []);
+
+    // Helper to fetch file and make it a buffer
+    const fetchToBuffer = async (url: string) => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Failed to fetch file at ${url}`);
+      return {
+        buffer: Buffer.from(await res.arrayBuffer()),
+        mimeType: res.headers.get('content-type') || 'application/pdf'
+      };
+    };
+
+    // 2. Download all files concurrently
+    const studentFiles = await Promise.all(activeFileUrls.map(fetchToBuffer));
 
     let frameworkInstructions = "";
     if (grading_framework === 'marzano') {
@@ -67,36 +76,38 @@ export async function POST(req: Request) {
     ${frameworkInstructions}
     
     RUBRIC (Max Score: ${max_score}):
-    ${rubric}`;
+    ${activeRubrics.join("\n\n---\n\n")}`;
 
     // 4. Construct AI context
+    const studentFileParts = studentFiles.map(sf => ({
+      type: 'file' as const,
+      data: sf.buffer,
+      mediaType: sf.mimeType,
+    }));
+
     const aiMessages: any[] = [
       {
         role: 'user',
         content: [
           { type: 'text', text: 'Student Submission Attached:' },
-          {
-            type: 'file',
-            data: buffer,
-            mediaType: mimeType,
-          },
+          ...studentFileParts,
         ]
       }
     ];
 
-    if (exemplar_url) {
-      const execResponse = await fetch(exemplar_url);
-      const execBuffer = Buffer.from(await execResponse.arrayBuffer());
-      const execMimeType = execResponse.headers.get('content-type') || 'application/pdf';
+    if (activeExemplars.length > 0) {
+      const execFiles = await Promise.all(activeExemplars.map(fetchToBuffer));
+      const execFileParts = execFiles.map(ef => ({
+        type: 'file' as const,
+        data: ef.buffer,
+        mediaType: ef.mimeType,
+      }));
+
       aiMessages.push({
         role: 'user',
         content: [
           { type: 'text', text: 'PERFECT ANSWER KEY EXEMPLAR Attached. Use this to benchmark the student against.' },
-          {
-            type: 'file',
-            data: execBuffer,
-            mediaType: execMimeType,
-          },
+          ...execFileParts,
         ]
       });
     }

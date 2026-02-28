@@ -10,7 +10,9 @@ interface Assignment {
   title: string;
   max_score: number;
   rubric: string;
+  rubrics?: string[];
   exemplar_url?: string;
+  exemplar_urls?: string[];
   grading_framework: "standard" | "marzano";
   created_at: string;
 }
@@ -25,8 +27,8 @@ export default function TeacherDashboard() {
   const [newScore, setNewScore] = useState(100);
   const [rubricType, setRubricType] = useState<"text" | "file">("text");
   const [newRubricText, setNewRubricText] = useState("");
-  const [newRubricFile, setNewRubricFile] = useState<File | null>(null);
-  const [newExemplarFile, setNewExemplarFile] = useState<File | null>(null);
+  const [newRubricFiles, setNewRubricFiles] = useState<File[]>([]);
+  const [newExemplarFiles, setNewExemplarFiles] = useState<File[]>([]);
   const [createLoading, setCreateLoading] = useState(false);
 
   // Fetch initial assignments
@@ -54,50 +56,68 @@ export default function TeacherDashboard() {
     setCreateLoading(true);
 
     let finalRubricValue = newRubricText;
+    let finalRubricsArray = newRubricText ? [newRubricText] : [];
 
-    if (rubricType === "file" && newRubricFile) {
-      const fileExt = newRubricFile.name.split('.').pop();
-      const fileName = `${Date.now()}_rubric.${fileExt}`;
+    if (rubricType === "file" && newRubricFiles.length > 0) {
+      const uploadPromises = newRubricFiles.map(async (file) => {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}_rubric.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('rubrics')
-        .upload(fileName, newRubricFile);
+        const { error: uploadError } = await supabase.storage
+          .from('rubrics')
+          .upload(fileName, file);
 
-      if (uploadError) {
-        console.error("Error uploading rubric:", uploadError);
-        alert("Failed to upload the rubric file. Please ensure you created the 'rubrics' public storage bucket in Supabase.");
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('rubrics')
+          .getPublicUrl(fileName);
+
+        return publicUrlData.publicUrl;
+      });
+
+      try {
+        const urls = await Promise.all(uploadPromises);
+        finalRubricValue = urls[0]; // fallback for old column
+        finalRubricsArray = urls;
+      } catch (uploadError) {
+        console.error("Error uploading rubrics:", uploadError);
+        alert("Failed to upload the rubric files. Please ensure you created the 'rubrics' public storage bucket in Supabase.");
         setCreateLoading(false);
         return;
       }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('rubrics')
-        .getPublicUrl(fileName);
-
-      finalRubricValue = publicUrlData.publicUrl;
     }
 
     let finalExemplarValue = null;
-    if (newExemplarFile) {
-      const execExt = newExemplarFile.name.split('.').pop();
-      const execName = `${Date.now()}_exemplar.${execExt}`;
+    let finalExemplarArray = null;
+    if (newExemplarFiles.length > 0) {
+      const uploadPromises = newExemplarFiles.map(async (file) => {
+        const execExt = file.name.split('.').pop();
+        const execName = `${Date.now()}_${Math.random().toString(36).substring(7)}_exemplar.${execExt}`;
 
-      const { error: uploadExecError } = await supabase.storage
-        .from('rubrics')
-        .upload(execName, newExemplarFile);
+        const { error: uploadExecError } = await supabase.storage
+          .from('rubrics')
+          .upload(execName, file);
 
-      if (uploadExecError) {
-        console.error("Error uploading exemplar:", uploadExecError);
-        alert("Failed to upload the Exemplar file.");
+        if (uploadExecError) throw uploadExecError;
+
+        const { data: publicExecData } = supabase.storage
+          .from('rubrics')
+          .getPublicUrl(execName);
+
+        return publicExecData.publicUrl;
+      });
+
+      try {
+        const urls = await Promise.all(uploadPromises);
+        finalExemplarValue = urls[0]; // fallback for old column
+        finalExemplarArray = urls;
+      } catch (uploadExecError) {
+        console.error("Error uploading exemplars:", uploadExecError);
+        alert("Failed to upload the Exemplar files.");
         setCreateLoading(false);
         return;
       }
-
-      const { data: publicExecData } = supabase.storage
-        .from('rubrics')
-        .getPublicUrl(execName);
-
-      finalExemplarValue = publicExecData.publicUrl;
     }
 
     const finalScore = gradingFramework === "marzano" ? 4 : newScore;
@@ -109,7 +129,9 @@ export default function TeacherDashboard() {
           title: newTitle,
           max_score: finalScore,
           rubric: finalRubricValue,
+          rubrics: finalRubricsArray.length > 0 ? finalRubricsArray : null,
           exemplar_url: finalExemplarValue,
+          exemplar_urls: finalExemplarArray,
           grading_framework: gradingFramework
         }
       ])
@@ -125,8 +147,8 @@ export default function TeacherDashboard() {
       setNewScore(100);
       setGradingFramework("standard");
       setNewRubricText("");
-      setNewRubricFile(null);
-      setNewExemplarFile(null);
+      setNewRubricFiles([]);
+      setNewExemplarFiles([]);
     }
     setCreateLoading(false);
   };
@@ -240,17 +262,18 @@ export default function TeacherDashboard() {
                             type="file"
                             className="sr-only"
                             required
+                            multiple
                             accept=".pdf, .png, .jpg, .jpeg"
                             onChange={(e) => {
-                              if (e.target.files && e.target.files.length > 0) {
-                                setNewRubricFile(e.target.files[0]);
+                              if (e.target.files) {
+                                setNewRubricFiles(Array.from(e.target.files));
                               }
                             }}
                           />
                         </label>
                       </div>
-                      <p className="text-xs text-gray-500 mt-2">PDF, PNG, or JPG formats supported</p>
-                      {newRubricFile && <p className="text-sm font-semibold text-indigo-900 mt-2">{newRubricFile.name}</p>}
+                      <p className="text-xs text-gray-500 mt-2">Upload one or multiple pages (PDF, PNG, JPG)</p>
+                      {newRubricFiles.length > 0 && <p className="text-sm font-semibold text-indigo-900 mt-2">{newRubricFiles.length} file(s) selected</p>}
                     </div>
                   </div>
                 )}
@@ -266,17 +289,18 @@ export default function TeacherDashboard() {
                         <input
                           type="file"
                           className="sr-only"
+                          multiple
                           accept=".pdf, .png, .jpg, .jpeg"
                           onChange={(e) => {
-                            if (e.target.files && e.target.files.length > 0) {
-                              setNewExemplarFile(e.target.files[0]);
+                            if (e.target.files) {
+                              setNewExemplarFiles(Array.from(e.target.files));
                             }
                           }}
                         />
                       </label>
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">Uploading this eliminates AI hallucinations on answers.</p>
-                    {newExemplarFile && <p className="text-sm font-semibold text-emerald-900 mt-2">{newExemplarFile.name}</p>}
+                    <p className="text-xs text-gray-500 mt-2">Select one or multiple pages. Uploading this eliminates AI hallucinations on answers.</p>
+                    {newExemplarFiles.length > 0 && <p className="text-sm font-semibold text-emerald-900 mt-2">{newExemplarFiles.length} file(s) selected</p>}
                   </div>
                 </div>
               </div>
