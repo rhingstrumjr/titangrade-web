@@ -1,0 +1,7 @@
+
+C:\Users\rhing\.gemini\antigravity\scratch\titangrade-web\src\app\teacher\submissions\[assignmentId]\page.tsx
+  365:83  error  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+  365:98  error  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+
+✖ 2 problems (2 errors, 0 warnings)
+

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronRight, FileText, Download, Star } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronRight, FileText, Download, Star, Edit2, X, Save } from "lucide-react";
 
 interface Submission {
   id: string;
@@ -34,6 +34,9 @@ export default function SubmissionsView() {
   const [studentGroups, setStudentGroups] = useState<StudentGroup[]>([]);
   const [expandedEmail, setExpandedEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editingSubId, setEditingSubId] = useState<string | null>(null);
+  const [editScore, setEditScore] = useState("");
+  const [editFeedback, setEditFeedback] = useState("");
 
   useEffect(() => {
     async function fetchData() {
@@ -144,6 +147,45 @@ export default function SubmissionsView() {
     }
   };
 
+  const startEditing = (sub: Submission) => {
+    setEditingSubId(sub.id);
+    setEditScore(sub.score || "");
+    setEditFeedback(sub.feedback || "");
+  };
+
+  const cancelEditing = () => {
+    setEditingSubId(null);
+    setEditScore("");
+    setEditFeedback("");
+  };
+
+  const saveGradeOverride = async (sub: Submission, email: string) => {
+    const { error } = await supabase
+      .from('submissions')
+      .update({ score: editScore, feedback: editFeedback })
+      .eq('id', sub.id);
+
+    if (!error) {
+      setStudentGroups(prevGroups => prevGroups.map(group => {
+        if (group.email === email) {
+          const updatedSubmissions = group.submissions.map(s =>
+            s.id === sub.id ? { ...s, score: editScore, feedback: editFeedback } : s
+          );
+          return {
+            ...group,
+            submissions: updatedSubmissions,
+            latestScore: updatedSubmissions[updatedSubmissions.length - 1].score
+          };
+        }
+        return group;
+      }));
+      setEditingSubId(null);
+    } else {
+      console.error("Failed to save grade override", error);
+      alert("Failed to save edited grade.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-8">
       <div className="max-w-6xl mx-auto space-y-8">
@@ -238,47 +280,97 @@ export default function SubmissionsView() {
                               <h4 className="text-xs font-semibold text-gray-500 uppercase mb-3">Submission History</h4>
                               <div className="space-y-3">
                                 {group.submissions.map((sub, index) => (
-                                  <div key={sub.id} className="bg-white border text-sm border-gray-200 rounded-lg p-4 flex items-center justify-between shadow-sm">
-                                    <div className="flex items-center gap-4">
-                                      <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
-                                        {index + 1}
-                                      </div>
-                                      <div>
-                                        <p className="font-medium text-gray-900">Draft {index + 1}</p>
-                                        <p className="text-xs text-gray-500">{new Date(sub.created_at).toLocaleString()}</p>
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-6">
-                                      {sub.status === 'graded' && sub.score ? (
-                                        <div className="text-center">
-                                          <p className="text-xs text-gray-500 uppercase font-semibold">Score</p>
-                                          <p className="font-bold text-gray-900">{sub.score}</p>
+                                  <div key={sub.id} className="bg-white border text-sm border-gray-200 rounded-lg p-4 flex flex-col gap-4 shadow-sm">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-4">
+                                        <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                                          {index + 1}
                                         </div>
-                                      ) : sub.status === 'pending' ? (
-                                        <p className="text-yellow-600 font-medium text-xs flex items-center"><Clock size={12} className="mr-1" /> Grading in progress...</p>
-                                      ) : null}
+                                        <div>
+                                          <p className="font-medium text-gray-900">Draft {index + 1}</p>
+                                          <p className="text-xs text-gray-500">{new Date(sub.created_at).toLocaleString()}</p>
+                                        </div>
+                                      </div>
 
-                                      <div className="flex flex-col gap-2 relative z-10">
-                                        <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 text-indigo-600 hover:text-indigo-800 transition-colors bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-md font-medium text-xs">
-                                          <FileText size={14} /> View Document
-                                        </a>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            toggleExemplar(sub.id, sub.is_exemplar, group.email);
-                                          }}
-                                          className={`flex items-center justify-center gap-1.5 transition-colors border px-3 py-1.5 rounded-md font-medium text-xs
-                                            ${sub.is_exemplar
-                                              ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
-                                              : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-amber-600"
-                                            }`}
-                                        >
-                                          <Star size={14} className={sub.is_exemplar ? "fill-amber-500 text-amber-500" : ""} />
-                                          {sub.is_exemplar ? "Unmark Exemplar" : "Mark as Exemplar"}
-                                        </button>
+                                      <div className="flex items-center gap-6">
+                                        {/* Score Block */}
+                                        {sub.status === 'graded' && sub.score ? (
+                                          editingSubId === sub.id ? (
+                                            <div className="flex flex-col">
+                                              <p className="text-xs text-gray-500 uppercase font-semibold mb-1">Score</p>
+                                              <input
+                                                type="text"
+                                                value={editScore}
+                                                onChange={(e) => setEditScore(e.target.value)}
+                                                className="border border-gray-300 rounded px-2 py-1 text-sm font-bold w-20 text-center focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                              />
+                                            </div>
+                                          ) : (
+                                            <div className="text-center">
+                                              <p className="text-xs text-gray-500 uppercase font-semibold">Score</p>
+                                              <p className="font-bold text-gray-900">{sub.score}</p>
+                                            </div>
+                                          )
+                                        ) : sub.status === 'pending' ? (
+                                          <p className="text-yellow-600 font-medium text-xs flex items-center"><Clock size={12} className="mr-1" /> Grading in progress...</p>
+                                        ) : null}
+
+                                        <div className="flex flex-col gap-2 relative z-10">
+                                          <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 text-indigo-600 hover:text-indigo-800 transition-colors bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-md font-medium text-xs">
+                                            <FileText size={14} /> View Document
+                                          </a>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleExemplar(sub.id, sub.is_exemplar, group.email);
+                                            }}
+                                            className={`flex items-center justify-center gap-1.5 transition-colors border px-3 py-1.5 rounded-md font-medium text-xs
+                                              ${sub.is_exemplar
+                                                ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                                                : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-amber-600"
+                                              }`}
+                                          >
+                                            <Star size={14} className={sub.is_exemplar ? "fill-amber-500 text-amber-500" : ""} />
+                                            {sub.is_exemplar ? "Unmark Exemplar" : "Mark as Exemplar"}
+                                          </button>
+                                        </div>
                                       </div>
                                     </div>
+
+                                    {/* Feedback & Editing Actions row */}
+                                    {sub.status === 'graded' && (
+                                      <div className="pt-3 border-t border-gray-100 flex flex-col gap-2">
+                                        {editingSubId === sub.id ? (
+                                          <>
+                                            <p className="text-xs text-gray-500 uppercase font-semibold">Feedback</p>
+                                            <textarea
+                                              value={editFeedback}
+                                              onChange={(e) => setEditFeedback(e.target.value)}
+                                              rows={3}
+                                              className="border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none w-full"
+                                            />
+                                            <div className="flex justify-end gap-2 mt-2">
+                                              <button onClick={(e) => { e.stopPropagation(); cancelEditing(); }} className="flex items-center px-3 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors relative z-10">
+                                                <X size={14} className="mr-1" /> Cancel
+                                              </button>
+                                              <button onClick={(e) => { e.stopPropagation(); saveGradeOverride(sub, group.email); }} className="flex items-center px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors relative z-10">
+                                                <Save size={14} className="mr-1" /> Save Override
+                                              </button>
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <div className="flex justify-between items-start gap-4">
+                                            <div className="flex-1">
+                                              <p className="text-xs text-gray-500 uppercase font-semibold mb-1">Feedback</p>
+                                              <p className="text-gray-700 italic">&quot;{sub.feedback}&quot;</p>
+                                            </div>
+                                            <button onClick={(e) => { e.stopPropagation(); startEditing(sub); }} className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-indigo-600 transition-colors bg-white border border-gray-200 hover:border-indigo-200 px-3 py-1.5 rounded-md relative z-10">
+                                              <Edit2 size={14} /> Edit Grade
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>
