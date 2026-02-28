@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon } from "lucide-react";
+import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon, Pencil, XCircle } from "lucide-react";
 import Link from "next/link";
 
 interface Class {
@@ -52,6 +52,7 @@ export default function TeacherDashboard() {
   const [selectedClassesForNewAssignment, setSelectedClassesForNewAssignment] = useState<string[]>([]);
   const [createLoading, setCreateLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
 
   const [isCreatingClass, setIsCreatingClass] = useState(false);
   const [newClassName, setNewClassName] = useState("");
@@ -93,7 +94,6 @@ export default function TeacherDashboard() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchClasses();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAssignments();
   }, []);
 
@@ -104,33 +104,38 @@ export default function TeacherDashboard() {
     let finalRubricValue = newRubricText;
     let finalRubricsArray = newRubricText ? [newRubricText] : [];
 
-    if (rubricType === "file" && newRubricFiles.length > 0) {
-      const uploadPromises = newRubricFiles.map(async (file) => {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}_rubric.${fileExt}`;
+    if (rubricType === "file") {
+      if (newRubricFiles.length > 0) {
+        const uploadPromises = newRubricFiles.map(async (file) => {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}_rubric.${fileExt}`;
 
-        const { error: uploadError } = await supabase.storage
-          .from('rubrics')
-          .upload(fileName, file);
+          const { error: uploadError } = await supabase.storage
+            .from('rubrics')
+            .upload(fileName, file);
 
-        if (uploadError) throw uploadError;
+          if (uploadError) throw uploadError;
 
-        const { data: publicUrlData } = supabase.storage
-          .from('rubrics')
-          .getPublicUrl(fileName);
+          const { data: publicUrlData } = supabase.storage
+            .from('rubrics')
+            .getPublicUrl(fileName);
 
-        return publicUrlData.publicUrl;
-      });
+          return publicUrlData.publicUrl;
+        });
 
-      try {
-        const urls = await Promise.all(uploadPromises);
-        finalRubricValue = urls[0]; // fallback for old column
-        finalRubricsArray = urls;
-      } catch (uploadError) {
-        console.error("Error uploading rubrics:", uploadError);
-        alert("Failed to upload the rubric files. Please ensure you created the 'rubrics' public storage bucket in Supabase.");
-        setCreateLoading(false);
-        return;
+        try {
+          const urls = await Promise.all(uploadPromises);
+          finalRubricValue = urls[0]; // fallback for old column
+          finalRubricsArray = urls;
+        } catch (uploadError) {
+          console.error("Error uploading rubrics:", uploadError);
+          alert("Failed to upload the rubric files. Please ensure you created the 'rubrics' public storage bucket in Supabase.");
+          setCreateLoading(false);
+          return;
+        }
+      } else if (editingAssignment) {
+        finalRubricValue = editingAssignment.rubric;
+        finalRubricsArray = editingAssignment.rubrics || (editingAssignment.rubric ? [editingAssignment.rubric] : []);
       }
     }
 
@@ -164,9 +169,50 @@ export default function TeacherDashboard() {
         setCreateLoading(false);
         return;
       }
+    } else if (editingAssignment) {
+      finalExemplarValue = editingAssignment.exemplar_url;
+      finalExemplarArray = editingAssignment.exemplar_urls;
     }
 
     const finalScore = gradingFramework === "marzano" ? 4 : newScore;
+
+    if (editingAssignment) {
+      const { error } = await supabase
+        .from('assignments')
+        .update({
+          title: newTitle,
+          max_score: finalScore,
+          rubric: finalRubricValue,
+          rubrics: finalRubricsArray.length > 0 ? finalRubricsArray : null,
+          exemplar_url: finalExemplarValue,
+          exemplar_urls: finalExemplarArray,
+          grading_framework: gradingFramework,
+          max_attempts: maxAttempts,
+          is_socratic: isSocratic,
+        })
+        .eq('id', editingAssignment.id);
+
+      if (error) {
+        console.error("Error updating assignment:", error);
+        alert("Failed to update assignment");
+      } else {
+        setAssignments(assignments.map(a => a.id === editingAssignment.id ? {
+          ...a,
+          title: newTitle,
+          max_score: finalScore,
+          rubric: finalRubricValue,
+          rubrics: finalRubricsArray.length > 0 ? finalRubricsArray : null,
+          exemplar_url: finalExemplarValue,
+          exemplar_urls: finalExemplarArray,
+          grading_framework: gradingFramework,
+          max_attempts: maxAttempts,
+          is_socratic: isSocratic,
+        } as Assignment : a));
+        resetFormState();
+      }
+      setCreateLoading(false);
+      return;
+    }
 
     const inserts = selectedClassesForNewAssignment.length > 0
       ? selectedClassesForNewAssignment.map(classId => ({
@@ -204,18 +250,42 @@ export default function TeacherDashboard() {
       alert("Failed to create assignment");
     } else if (data && data.length > 0) {
       setAssignments([...data, ...assignments]);
-      setIsCreating(false);
-      setNewTitle("");
-      setNewScore(100);
-      setMaxAttempts(1);
-      setIsSocratic(false);
-      setGradingFramework("standard");
-      setNewRubricText("");
-      setNewRubricFiles([]);
-      setNewExemplarFiles([]);
-      setSelectedClassesForNewAssignment([]);
+      resetFormState();
     }
     setCreateLoading(false);
+  };
+
+  const resetFormState = () => {
+    setIsCreating(false);
+    setEditingAssignment(null);
+    setNewTitle("");
+    setNewScore(100);
+    setMaxAttempts(1);
+    setIsSocratic(false);
+    setGradingFramework("standard");
+    setNewRubricText("");
+    setNewRubricFiles([]);
+    setNewExemplarFiles([]);
+    setSelectedClassesForNewAssignment([]);
+  };
+
+  const handleEditAssignment = (assignment: Assignment) => {
+    setEditingAssignment(assignment);
+    setNewTitle(assignment.title);
+    setGradingFramework(assignment.grading_framework);
+    setNewScore(assignment.max_score);
+    setMaxAttempts(assignment.max_attempts || 1);
+    setIsSocratic(assignment.is_socratic || false);
+
+    if (assignment.rubric && assignment.rubric.startsWith('http')) {
+      setRubricType("file");
+    } else {
+      setRubricType("text");
+      setNewRubricText(assignment.rubric || "");
+    }
+
+    setIsCreating(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDeleteAssignment = async (id: string) => {
@@ -338,7 +408,8 @@ export default function TeacherDashboard() {
       setSingleStudentEmail("");
       fetchRoster(selectedClassId);
     } else {
-      alert("Failed to add student. Ensure email is correct and not already added.");
+      console.error(error);
+      alert("Failed to add student. Error: " + error.message);
     }
     setSavingRoster(false);
   };
@@ -379,25 +450,30 @@ export default function TeacherDashboard() {
       <div className="max-w-6xl mx-auto space-y-8">
 
         {/* Header */}
-        <div className="flex justify-between items-center pb-6 border-b border-gray-200">
+        <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-extrabold text-indigo-900 tracking-tight">TitanGrade Dashboard</h1>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">TitanGrade Dashboard</h1>
             <p className="text-gray-500 mt-1">Manage your class assignments and view student submissions</p>
           </div>
-          <button
-            onClick={() => setIsCreating(!isCreating)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-sm"
-          >
-            <PlusCircle size={20} />
-            {isCreating ? "Cancel" : "New Assignment"}
-          </button>
+          {!isCreating && (
+            <button
+              onClick={() => resetFormState() || setIsCreating(true)}
+              className="bg-indigo-600 border border-transparent text-white hover:bg-indigo-700 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow-md flex items-center"
+            >
+              <PlusCircle size={18} className="mr-2" /> Create Assignment
+            </button>
+          )}
         </div>
 
-        {/* Create Assignment Form */}
         {isCreating && (
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm animate-in fade-in slide-in-from-top-4">
-            <h2 className="text-xl font-bold mb-4">Create New Assignment</h2>
-            <form onSubmit={handleCreateAssignment} className="space-y-4">
+          <div className="bg-white p-6 md:p-8 border border-gray-200 rounded-xl mb-8 shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+              <h2 className="text-xl font-bold text-gray-900">{editingAssignment ? "Edit Assignment" : "Create New Assignment"}</h2>
+              <button onClick={() => resetFormState()} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <XCircle size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleCreateAssignment} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="md:col-span-3">
                   <label className="block text-sm font-semibold mb-1">Assignment Title</label>
@@ -447,7 +523,7 @@ export default function TeacherDashboard() {
                   <p className="text-xs text-gray-500 mt-1">Allowed drafts</p>
                 </div>
 
-                {classes.length > 0 && (
+                {!editingAssignment && classes.length > 0 && (
                   <div className="md:col-span-4 p-4 border border-gray-200 rounded-lg">
                     <label className="block text-sm font-semibold mb-2">Assign to Classes</label>
                     <div className="flex flex-wrap gap-3">
@@ -542,7 +618,13 @@ export default function TeacherDashboard() {
                         </label>
                       </div>
                       <p className="text-xs text-gray-500 mt-2">Upload one or multiple pages (PDF, PNG, JPG)</p>
-                      {newRubricFiles.length > 0 && <p className="text-sm font-semibold text-indigo-900 mt-2">{newRubricFiles.length} file(s) selected</p>}
+                      {newRubricFiles.length > 0 ? (
+                        <p className="text-sm font-semibold text-indigo-900 mt-2">{newRubricFiles.length} file(s) selected</p>
+                      ) : (
+                        editingAssignment && rubricType === "file" && (
+                          <p className="text-sm font-semibold text-indigo-900 mt-2">Keeping previously uploaded file.</p>
+                        )
+                      )}
                     </div>
                   </div>
                 )}
@@ -569,7 +651,13 @@ export default function TeacherDashboard() {
                       </label>
                     </div>
                     <p className="text-xs text-gray-500 mt-2">Select one or multiple pages. Uploading this eliminates AI hallucinations on answers.</p>
-                    {newExemplarFiles.length > 0 && <p className="text-sm font-semibold text-emerald-900 mt-2">{newExemplarFiles.length} file(s) selected</p>}
+                    {newExemplarFiles.length > 0 ? (
+                      <p className="text-sm font-semibold text-emerald-900 mt-2">{newExemplarFiles.length} file(s) selected</p>
+                    ) : (
+                      editingAssignment && editingAssignment.exemplar_url && (
+                        <p className="text-sm font-semibold text-emerald-900 mt-2">Keeping previously uploaded exemplar.</p>
+                      )
+                    )}
                   </div>
                 </div>
               </div>
@@ -580,7 +668,7 @@ export default function TeacherDashboard() {
                   disabled={createLoading}
                   className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium transition-all shadow-sm"
                 >
-                  {createLoading ? "Creating..." : "Save Assignment"}
+                  {createLoading ? "Saving..." : (editingAssignment ? "Update Assignment" : "Create Assignment")}
                 </button>
               </div>
             </form>
@@ -689,7 +777,22 @@ export default function TeacherDashboard() {
                         )}
                       </button>
                     </div>
-                    <div className="flex items-center text-sm text-gray-500 mb-4">
+                    <div className="flex justify-between items-start mb-2 mt-[-24px] pointer-events-none">
+                      <div className="flex-grow"></div>
+                      <div className="flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity pointer-events-auto group-hover:opacity-100 pr-8">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleEditAssignment(assignment);
+                          }}
+                          className="text-gray-400 hover:text-indigo-600 transition-colors p-1.5 rounded-md hover:bg-indigo-50 focus:outline-none flex-shrink-0"
+                          title="Edit Assignment"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-center text-sm text-gray-500 mb-4 mt-2">
                       <span className="font-medium text-indigo-100 bg-indigo-600 px-2 py-0.5 rounded mr-2">
                         {assignment.grading_framework === 'marzano' ? 'Marzano (4.0)' : `${assignment.max_score} pts`}
                       </span>
