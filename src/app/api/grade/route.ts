@@ -149,7 +149,7 @@ export async function POST(req: Request) {
     // 5. Send Email via Resend
     try {
       await resend.emails.send({
-        from: 'TitanGrade <onboarding@resend.dev>', // Replace with your verified domain in production
+        from: 'TitanGrade <teacher@titangrade.org>',
         to: [student_email],
         subject: `Your Grade for ${title} is ready!`,
         html: `
