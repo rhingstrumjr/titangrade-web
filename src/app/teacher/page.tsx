@@ -14,6 +14,7 @@ interface Assignment {
   exemplar_url?: string;
   exemplar_urls?: string[];
   grading_framework: "standard" | "marzano";
+  max_attempts: number;
   created_at: string;
 }
 
@@ -25,6 +26,7 @@ export default function TeacherDashboard() {
   const [newTitle, setNewTitle] = useState("");
   const [gradingFramework, setGradingFramework] = useState<"standard" | "marzano">("standard");
   const [newScore, setNewScore] = useState(100);
+  const [maxAttempts, setMaxAttempts] = useState(1);
   const [rubricType, setRubricType] = useState<"text" | "file">("text");
   const [newRubricText, setNewRubricText] = useState("");
   const [newRubricFiles, setNewRubricFiles] = useState<File[]>([]);
@@ -133,7 +135,8 @@ export default function TeacherDashboard() {
           rubrics: finalRubricsArray.length > 0 ? finalRubricsArray : null,
           exemplar_url: finalExemplarValue,
           exemplar_urls: finalExemplarArray,
-          grading_framework: gradingFramework
+          grading_framework: gradingFramework,
+          max_attempts: maxAttempts
         }
       ])
       .select();
@@ -146,6 +149,7 @@ export default function TeacherDashboard() {
       setIsCreating(false);
       setNewTitle("");
       setNewScore(100);
+      setMaxAttempts(1);
       setGradingFramework("standard");
       setNewRubricText("");
       setNewRubricFiles([]);
@@ -245,6 +249,18 @@ export default function TeacherDashboard() {
                     />
                   </div>
                 )}
+                <div>
+                  <label className="block text-sm font-semibold mb-1">Max Submissions</label>
+                  <input
+                    type="number"
+                    required
+                    value={maxAttempts}
+                    onChange={(e) => setMaxAttempts(parseInt(e.target.value))}
+                    min={1}
+                    className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Allowed drafts</p>
+                </div>
               </div>
 
               <div>

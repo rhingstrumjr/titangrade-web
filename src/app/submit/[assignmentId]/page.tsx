@@ -10,6 +10,7 @@ export default function SubmitPage() {
   const assignmentId = params.assignmentId as string;
 
   const [assignmentName, setAssignmentName] = useState("Loading Assignment...");
+  const [maxAttempts, setMaxAttempts] = useState(1);
   const [loading, setLoading] = useState(true);
 
   const [name, setName] = useState("");
@@ -18,13 +19,15 @@ export default function SubmitPage() {
 
   const [submitStatus, setSubmitStatus] = useState<"idle" | "uploading" | "grading" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [submissionsUsed, setSubmissionsUsed] = useState<number | null>(null);
+  const [checkingLimit, setCheckingLimit] = useState(false);
 
   useEffect(() => {
     async function fetchAssignment() {
       if (!assignmentId) return;
       const { data, error } = await supabase
         .from('assignments')
-        .select('title')
+        .select('title, max_attempts')
         .eq('id', assignmentId)
         .single();
 
@@ -32,11 +35,31 @@ export default function SubmitPage() {
         setAssignmentName("Assignment Not Found");
       } else {
         setAssignmentName(data.title);
+        setMaxAttempts(data.max_attempts || 1);
       }
       setLoading(false);
     }
     fetchAssignment();
   }, [assignmentId]);
+
+  const checkSubmissionLimit = async (emailToCheck: string) => {
+    if (!emailToCheck || !emailToCheck.includes('@')) {
+      setSubmissionsUsed(null);
+      return;
+    }
+
+    setCheckingLimit(true);
+    const { count, error } = await supabase
+      .from('submissions')
+      .select('*', { count: 'exact', head: true })
+      .eq('assignment_id', assignmentId)
+      .eq('student_email', emailToCheck);
+
+    if (!error && count !== null) {
+      setSubmissionsUsed(count);
+    }
+    setCheckingLimit(false);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -47,6 +70,7 @@ export default function SubmitPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (files.length === 0 || !name || !email) return;
+    if (submissionsUsed !== null && submissionsUsed >= maxAttempts) return;
 
     setSubmitStatus("uploading");
 
@@ -167,11 +191,28 @@ export default function SubmitPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onBlur={(e) => checkSubmissionLimit(e.target.value)}
                   disabled={submitStatus === "uploading" || submitStatus === "grading"}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="johndoe@student.edu"
                 />
-                <p className="mt-1 text-xs text-gray-500">Make sure this is correct, as your feedback will be emailed here.</p>
+                <div className="mt-2 min-h-[20px]">
+                  {checkingLimit ? (
+                    <p className="text-xs text-gray-500">Checking submission limit...</p>
+                  ) : submissionsUsed !== null ? (
+                    submissionsUsed >= maxAttempts ? (
+                      <p className="text-sm font-semibold text-red-600">
+                        You have reached the maximum number of submissions ({maxAttempts}) for this assignment.
+                      </p>
+                    ) : (
+                      <p className="text-sm font-semibold text-emerald-600">
+                        You have {maxAttempts - submissionsUsed} remaining submission{maxAttempts - submissionsUsed !== 1 ? 's' : ''} until your grade is final.
+                      </p>
+                    )
+                  ) : (
+                    <p className="text-xs text-gray-500">Make sure this is correct, as your feedback will be emailed here.</p>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -189,7 +230,7 @@ export default function SubmitPage() {
                           multiple
                           accept=".pdf, .png, .jpg, .jpeg"
                           onChange={handleFileChange}
-                          disabled={submitStatus === "uploading" || submitStatus === "grading"}
+                          disabled={submitStatus === "uploading" || submitStatus === "grading" || (submissionsUsed !== null && submissionsUsed >= maxAttempts)}
                         />
                       </label>
                     </div>
@@ -210,7 +251,7 @@ export default function SubmitPage() {
             <div>
               <button
                 type="submit"
-                disabled={submitStatus === "uploading" || submitStatus === "grading" || files.length === 0 || !name || !email}
+                disabled={submitStatus === "uploading" || submitStatus === "grading" || files.length === 0 || !name || !email || (submissionsUsed !== null && submissionsUsed >= maxAttempts) || checkingLimit}
                 className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
               >
                 {submitStatus === "idle" || submitStatus === "error" ? "Submit Assignment"
