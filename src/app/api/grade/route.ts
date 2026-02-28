@@ -1,0 +1,191 @@
+import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+import { google } from '@ai-sdk/google';
+import { generateObject } from 'ai';
+import { z } from 'zod';
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY!);
+
+export async function POST(req: Request) {
+  try {
+    const { submissionId } = await req.json();
+
+    if (!submissionId) {
+      return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
+    }
+
+    // 1. Fetch submission details
+    const { data: submission, error: subError } = await supabase
+      .from('submissions')
+      .select('*, assignment:assignments(*)')
+      .eq('id', submissionId)
+      .single();
+
+    if (subError || !submission) {
+      throw new Error('Submission not found');
+    }
+
+    const { file_url, student_email, student_name, assignment } = submission;
+    const { rubric, max_score, title, grading_framework, exemplar_url } = assignment;
+
+    // 2. Download the file from Supabase public URL
+    const fileResponse = await fetch(file_url);
+    if (!fileResponse.ok) {
+      throw new Error('Failed to fetch the uploaded file for grading');
+    }
+    const arrayBuffer = await fileResponse.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const mimeType = fileResponse.headers.get('content-type') || 'application/pdf';
+
+    let frameworkInstructions = "";
+    if (grading_framework === 'marzano') {
+      frameworkInstructions = `
+      GRADING FRAMEWORK (Marzano 4.0 Scale):
+      You MUST use the strict Marzano proficiency scale:
+      - 4.0 (Advanced): Exceeds standard, applies knowledge in new contexts.
+      - 3.0 (Proficient): Meets the standard perfectly (Target score).
+      - 2.0 (Approaching): Understands basic concepts but misses complex applications.
+      - 1.0 (Beginning): Cannot complete task without help.
+      - 0.0: No evidence of learning.
+      *Use half points (e.g. 2.5, 3.5) if appropriate.*
+      `;
+    }
+
+    // 3. Call Gemini 2.5 Flash for Grading
+    let systemPrompt = `You are an elite, encouraging Science Teacher grading a student's assignment titled "${title}".
+    Your job:
+    1. EXPLICIT EXTRACTION: Transcribe the answer for every single question. For multiple choice, students may WRITE the letter or circle it. State EXPLICITLY what you see (e.g. "Question 1: Wrote B" or "Question 2: Circled C"). If there are no physical pen/pencil marks, explicitly state "Question X: BLANK". Warning: Do not mistake scanner artifacts or smudges for circles.
+    2. EVALUATION: Compare the extracted answers against the rubric and/or exemplar.
+    3. FEEDBACK: Be specific, constructive, and motivating.
+    
+    CRITICAL ANTI-HALLUCINATION RULES:
+    - Never guess what the student "meant" to circle. Only grade the markings physically present on the page.
+    - If comparing to an Exemplar, do a direct matching: Student Answer vs Exemplar Answer.
+    - Quote the exact text the student wrote when evaluating their reasoning.
+    
+    ${frameworkInstructions}
+    
+    RUBRIC (Max Score: ${max_score}):
+    ${rubric}`;
+
+    // 4. Construct AI context
+    const aiMessages: any[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Student Submission Attached:' },
+          {
+            type: 'file',
+            data: buffer,
+            mediaType: mimeType,
+          },
+        ]
+      }
+    ];
+
+    if (exemplar_url) {
+      const execResponse = await fetch(exemplar_url);
+      const execBuffer = Buffer.from(await execResponse.arrayBuffer());
+      const execMimeType = execResponse.headers.get('content-type') || 'application/pdf';
+      aiMessages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: 'PERFECT ANSWER KEY EXEMPLAR Attached. Use this to benchmark the student against.' },
+          {
+            type: 'file',
+            data: execBuffer,
+            mediaType: execMimeType,
+          },
+        ]
+      });
+    }
+
+    const { object } = await generateObject({
+      model: google('gemini-2.5-flash'),
+      system: systemPrompt,
+      messages: aiMessages,
+      schema: z.object({
+        Transcription: z.array(z.string()).describe("A pure extraction step. List exactly what marks the student made for each question. Example: 'Q1: Circled B', 'Q2: Blank', 'Q3: Wrote 'The cell divides.' It must be factual representation of the markings."),
+        Reasoning: z.array(z.string()).describe("Step-by-step reasoning comparing the Transcription vs the Rubric/Exemplar, then mapping to a score. Do not guess or hallucinate answers."),
+        Score: z.string().describe(`The numeric score the student achieved out of ${max_score}. E.g. "85" or "3.5"`),
+        Feedback: z.string().describe('2-4 sentences: specific, encouraging, actionable, rubric-referenced feedback'),
+      }),
+    });
+
+    const aiScore = `${object.Score}/${max_score}`;
+    const aiFeedback = object.Feedback;
+
+    // 4. Update the Submission in Supabase
+    const { error: updateError } = await supabase
+      .from('submissions')
+      .update({
+        score: aiScore,
+        feedback: aiFeedback,
+        status: 'graded',
+      })
+      .eq('id', submissionId);
+
+    if (updateError) {
+      console.error('Failed to update submission status:', updateError);
+      // We don't throw here so we can still try to email the student
+    }
+
+    // 5. Send Email via Resend
+    try {
+      await resend.emails.send({
+        from: 'TitanGrade <onboarding@resend.dev>', // Replace with your verified domain in production
+        to: [student_email],
+        subject: `Your Grade for ${title} is ready!`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+            <h2 style="color: #4f46e5;">TitanGrade Feedback</h2>
+            <p>Hello ${student_name},</p>
+            <p>Great effort on <strong>${title}</strong>! Here is your personalized feedback from the AI:</p>
+            
+            <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h1 style="margin-top: 0; color: #111827;">Score: ${aiScore}</h1>
+              <h3 style="margin-bottom: 5px;">Feedback:</h3>
+              <p style="margin-top: 0; line-height: 1.5;">${aiFeedback}</p>
+              
+              <details style="margin-top: 15px;">
+                <summary style="cursor: pointer; color: #4f46e5; font-weight: bold;">View Grading Details</summary>
+                
+                <h4 style="margin-top: 10px; margin-bottom: 5px;">1. AI Extracted Answers</h4>
+                <ul style="margin-top: 5px; padding-left: 20px; color: #555; margin-bottom: 10px;">
+                  ${object.Transcription.map(step => `<li style="margin-bottom: 5px;">${step}</li>`).join('')}
+                </ul>
+
+                <h4 style="margin-top: 10px; margin-bottom: 5px;">2. AI Scoring Reasoning</h4>
+                <ul style="margin-top: 5px; padding-left: 20px; color: #555;">
+                  ${object.Reasoning.map(step => `<li style="margin-bottom: 5px;">${step}</li>`).join('')}
+                </ul>
+              </details>
+            </div>
+            
+            <p>Remember: every scientist improves through iteration. Apply this feedback, and your next submission will be even stronger!</p>
+            <br/>
+            <p>Keep experimenting,<br/>Your Science Teacher</p>
+          </div>
+        `,
+      });
+    } catch (emailErr) {
+      console.error('Failed to send email:', emailErr);
+    }
+
+    return NextResponse.json({ success: true, score: aiScore });
+
+  } catch (error: any) {
+    console.error('Grading API Error:', error);
+
+    // Update status to error if something failed hard
+    try {
+      const { submissionId } = await req.clone().json();
+      if (submissionId) {
+        await supabase.from('submissions').update({ status: 'error' }).eq('id', submissionId);
+      }
+    } catch (e) { }
+
+    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  }
+}
