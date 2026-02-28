@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { PlusCircle, Link as LinkIcon, Users, FileText, Activity } from "lucide-react";
+import { PlusCircle, Link as LinkIcon, Users, FileText, Activity, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 interface Assignment {
@@ -30,6 +30,7 @@ export default function TeacherDashboard() {
   const [newRubricFiles, setNewRubricFiles] = useState<File[]>([]);
   const [newExemplarFiles, setNewExemplarFiles] = useState<File[]>([]);
   const [createLoading, setCreateLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Fetch initial assignments
   useEffect(() => {
@@ -151,6 +152,30 @@ export default function TeacherDashboard() {
       setNewExemplarFiles([]);
     }
     setCreateLoading(false);
+  };
+
+  const handleDeleteAssignment = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this assignment? All student submissions will also be deleted. This cannot be undone.")) {
+      return;
+    }
+
+    setDeletingId(id);
+
+    // Submissions should cascade delete if FK is set up, but let's delete them explicitly just in case
+    await supabase.from('submissions').delete().eq('assignment_id', id);
+
+    const { error } = await supabase
+      .from('assignments')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error deleting assignment:", error);
+      alert("Failed to delete assignment.");
+    } else {
+      setAssignments(assignments.filter(a => a.id !== id));
+    }
+    setDeletingId(null);
   };
 
   const copyToClipboard = (id: string) => {
@@ -341,9 +366,29 @@ export default function TeacherDashboard() {
               {assignments.map((assignment) => (
                 <div key={assignment.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
                   <div className="p-6 flex-grow">
-                    <h3 className="text-lg font-bold text-gray-900 mb-2 truncate" title={assignment.title}>
-                      {assignment.title}
-                    </h3>
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="text-lg font-bold text-gray-900 truncate pr-2" title={assignment.title}>
+                        {assignment.title}
+                      </h3>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleDeleteAssignment(assignment.id);
+                        }}
+                        disabled={deletingId === assignment.id}
+                        className="text-gray-400 hover:text-red-600 transition-colors p-1.5 rounded-md hover:bg-red-50 focus:outline-none flex-shrink-0"
+                        title="Delete Assignment"
+                      >
+                        {deletingId === assignment.id ? (
+                          <svg className="animate-spin h-4 w-4 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                     <div className="flex items-center text-sm text-gray-500 mb-4">
                       <span className="font-medium text-indigo-100 bg-indigo-600 px-2 py-0.5 rounded mr-2">
                         {assignment.grading_framework === 'marzano' ? 'Marzano (4.0)' : `${assignment.max_score} pts`}
