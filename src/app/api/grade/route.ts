@@ -197,6 +197,7 @@ export async function POST(req: Request) {
               <h3 style="margin-bottom: 5px;">Feedback:</h3>
               <p style="margin-top: 0; line-height: 1.5;">${aiFeedback}</p>
               
+              ${!is_socratic ? `
               <details style="margin-top: 15px;">
                 <summary style="cursor: pointer; color: #4f46e5; font-weight: bold;">View Grading Details</summary>
                 
@@ -210,6 +211,7 @@ export async function POST(req: Request) {
                   ${object.Reasoning.map(step => `<li style="margin-bottom: 5px;">${step}</li>`).join('')}
                 </ul>
               </details>
+              ` : ''}
             </div>
             
             <p>Remember: every scientist improves through iteration. Apply this feedback, and your next submission will be even stronger!</p>
