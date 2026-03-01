@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronRight, FileText, Download, Star, Edit2, X, Save } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronRight, FileText, Download, Star, Edit2, X, Save, Send } from "lucide-react";
 
 interface Submission {
   id: string;
@@ -15,6 +15,7 @@ interface Submission {
   feedback: string | null;
   status: string;
   is_exemplar: boolean;
+  email_sent: boolean;
   created_at: string;
 }
 
@@ -37,6 +38,7 @@ export default function SubmissionsView() {
   const [editingSubId, setEditingSubId] = useState<string | null>(null);
   const [editScore, setEditScore] = useState("");
   const [editFeedback, setEditFeedback] = useState("");
+  const [releasingGrades, setReleasingGrades] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -92,6 +94,11 @@ export default function SubmissionsView() {
   const toggleExpand = (email: string) => {
     setExpandedEmail(expandedEmail === email ? null : email);
   };
+
+  const unreleasedCount = studentGroups.reduce(
+    (count, group) => count + group.submissions.filter(s => s.status === 'graded' && !s.email_sent).length,
+    0
+  );
 
   const handleDownloadCSV = () => {
     if (studentGroups.length === 0) return;
@@ -153,6 +160,41 @@ export default function SubmissionsView() {
     setEditFeedback(sub.feedback || "");
   };
 
+  const handleReleaseGrades = async () => {
+    if (!confirm("Are you sure you want to release all pending grades? This will send emails to all students who have graded submissions that haven't been emailed yet.")) {
+      return;
+    }
+
+    setReleasingGrades(true);
+    try {
+      const res = await fetch('/api/release_grades', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ assignmentId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to release grades');
+
+      alert(`Successfully released ${data.count} grades!`);
+
+      // Update local state to mark them all as sent
+      setStudentGroups(prevGroups => prevGroups.map(group => ({
+        ...group,
+        submissions: group.submissions.map(sub =>
+          (sub.status === 'graded' && !sub.email_sent) ? { ...sub, email_sent: true } : sub
+        )
+      })));
+
+    } catch (e: unknown) {
+      const err = e as Error;
+      alert(`Error releasing grades: ${err.message}`);
+    }
+    setReleasingGrades(false);
+  };
+
   const cancelEditing = () => {
     setEditingSubId(null);
     setEditScore("");
@@ -200,13 +242,26 @@ export default function SubmissionsView() {
             <p className="text-gray-500 mt-1">{assignmentTitle}</p>
           </div>
 
-          <button
-            onClick={handleDownloadCSV}
-            disabled={studentGroups.length === 0}
-            className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
-          >
-            <Download size={16} /> Export CSV
-          </button>
+          <div className="flex items-center gap-3">
+            {unreleasedCount > 0 && (
+              <button
+                onClick={handleReleaseGrades}
+                disabled={releasingGrades}
+                className="flex items-center gap-2 bg-indigo-600 border border-transparent text-white hover:bg-indigo-700 disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+              >
+                <Send size={16} />
+                {releasingGrades ? "Releasing..." : `Release ${unreleasedCount} Grades`}
+              </button>
+            )}
+
+            <button
+              onClick={handleDownloadCSV}
+              disabled={studentGroups.length === 0}
+              className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+            >
+              <Download size={16} /> Export CSV
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -233,7 +288,7 @@ export default function SubmissionsView() {
                     <React.Fragment key={group.email}>
                       {/* Parent Row */}
                       <tr
-                        className={`hover:bg-gray-50 transition-colors cursor-pointer ${expandedEmail === group.email ? 'bg-indigo-50/50' : ''}`}
+                        className={`hover: bg - gray - 50 transition - colors cursor - pointer ${expandedEmail === group.email ? 'bg-indigo-50/50' : ''}`}
                         onClick={() => toggleExpand(group.email)}
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -254,9 +309,16 @@ export default function SubmissionsView() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           {group.latestStatus === 'graded' ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              <CheckCircle2 size={12} className="mr-1" /> Graded
-                            </span>
+                            <div className="flex flex-col">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 w-fit">
+                                <CheckCircle2 size={12} className="mr-1" /> Graded
+                              </span>
+                              {!group.submissions[group.submissions.length - 1].email_sent && (
+                                <span className="text-[10px] text-orange-600 mt-1 font-medium ml-1 flex items-center">
+                                  <Clock size={10} className="mr-1" /> Pending Release
+                                </span>
+                              )}
+                            </div>
                           ) : group.latestStatus === 'pending' ? (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                               <Clock size={12} className="mr-1" /> Grading...
@@ -324,11 +386,11 @@ export default function SubmissionsView() {
                                               e.stopPropagation();
                                               toggleExemplar(sub.id, sub.is_exemplar, group.email);
                                             }}
-                                            className={`flex items-center justify-center gap-1.5 transition-colors border px-3 py-1.5 rounded-md font-medium text-xs
+                                            className={`flex items - center justify - center gap - 1.5 transition - colors border px - 3 py - 1.5 rounded - md font - medium text - xs
                                               ${sub.is_exemplar
                                                 ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
                                                 : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-amber-600"
-                                              }`}
+                                              } `}
                                           >
                                             <Star size={14} className={sub.is_exemplar ? "fill-amber-500 text-amber-500" : ""} />
                                             {sub.is_exemplar ? "Unmark Exemplar" : "Mark as Exemplar"}

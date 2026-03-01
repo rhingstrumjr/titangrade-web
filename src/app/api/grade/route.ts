@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     }
 
     const { file_url, file_urls, student_email, student_name, assignment } = submission;
-    const { rubric, rubrics, max_score, title, grading_framework, exemplar_url, exemplar_urls, is_socratic } = assignment;
+    const { rubric, rubrics, max_score, title, grading_framework, exemplar_url, exemplar_urls, is_socratic, auto_send_emails } = assignment;
 
     // Use array if provided, fallback to standard field
     const activeFileUrls = file_urls && file_urls.length > 0 ? file_urls : [file_url];
@@ -165,6 +165,8 @@ export async function POST(req: Request) {
     const aiScore = `${object.Score}/${max_score}`;
     const aiFeedback = object.Feedback;
 
+    const shouldSendEmail = auto_send_emails !== false; // Default to true if undefined
+
     // 4. Update the Submission in Supabase
     const { error: updateError } = await supabase
       .from('submissions')
@@ -172,6 +174,7 @@ export async function POST(req: Request) {
         score: aiScore,
         feedback: aiFeedback,
         status: 'graded',
+        email_sent: shouldSendEmail,
       })
       .eq('id', submissionId);
 
@@ -180,49 +183,51 @@ export async function POST(req: Request) {
       // We don't throw here so we can still try to email the student
     }
 
-    // 5. Send Email via Resend
-    try {
-      await resend.emails.send({
-        from: 'TitanGrade <teacher@titangrade.org>',
-        to: [student_email],
-        subject: `Your Grade for ${title} is ready!`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-            <h2 style="color: #4f46e5;">TitanGrade Feedback</h2>
-            <p>Hello ${student_name},</p>
-            <p>Great effort on <strong>${title}</strong>! Here is your personalized feedback from the AI:</p>
-            
-            <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <h1 style="margin-top: 0; color: #111827;">Score: ${aiScore}</h1>
-              <h3 style="margin-bottom: 5px;">Feedback:</h3>
-              <p style="margin-top: 0; line-height: 1.5;">${aiFeedback}</p>
+    // 5. Send Email via Resend (if auto-send is enabled)
+    if (shouldSendEmail) {
+      try {
+        await resend.emails.send({
+          from: 'TitanGrade <teacher@titangrade.org>',
+          to: [student_email],
+          subject: `Your Grade for ${title} is ready!`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+              <h2 style="color: #4f46e5;">TitanGrade Feedback</h2>
+              <p>Hello ${student_name},</p>
+              <p>Great effort on <strong>${title}</strong>! Here is your personalized feedback from the AI:</p>
               
-              ${!is_socratic ? `
-              <details style="margin-top: 15px;">
-                <summary style="cursor: pointer; color: #4f46e5; font-weight: bold;">View Grading Details</summary>
+              <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h1 style="margin-top: 0; color: #111827;">Score: ${aiScore}</h1>
+                <h3 style="margin-bottom: 5px;">Feedback:</h3>
+                <p style="margin-top: 0; line-height: 1.5;">${aiFeedback}</p>
                 
-                <h4 style="margin-top: 10px; margin-bottom: 5px;">1. AI Extracted Answers</h4>
-                <ul style="margin-top: 5px; padding-left: 20px; color: #555; margin-bottom: 10px;">
-                  ${object.Transcription.map(step => `<li style="margin-bottom: 5px;">${step}</li>`).join('')}
-                </ul>
+                ${!is_socratic ? `
+                <details style="margin-top: 15px;">
+                  <summary style="cursor: pointer; color: #4f46e5; font-weight: bold;">View Grading Details</summary>
+                  
+                  <h4 style="margin-top: 10px; margin-bottom: 5px;">1. AI Extracted Answers</h4>
+                  <ul style="margin-top: 5px; padding-left: 20px; color: #555; margin-bottom: 10px;">
+                    ${object.Transcription.map(step => `<li style="margin-bottom: 5px;">${step}</li>`).join('')}
+                  </ul>
 
-                <h4 style="margin-top: 10px; margin-bottom: 5px;">2. AI Scoring Reasoning</h4>
-                <ul style="margin-top: 5px; padding-left: 20px; color: #555;">
-                  ${object.Reasoning.map(step => `<li style="margin-bottom: 5px;">${step}</li>`).join('')}
-                </ul>
-              </details>
-              ` : ''}
+                  <h4 style="margin-top: 10px; margin-bottom: 5px;">2. AI Scoring Reasoning</h4>
+                  <ul style="margin-top: 5px; padding-left: 20px; color: #555;">
+                    ${object.Reasoning.map(step => `<li style="margin-bottom: 5px;">${step}</li>`).join('')}
+                  </ul>
+                </details>
+                ` : ''}
+              </div>
+              
+              <p>Remember: every scientist improves through iteration. Apply this feedback, and your next submission will be even stronger!</p>
+              <br/>
+              <p>Keep experimenting,<br/>Your Science Teacher</p>
             </div>
-            
-            <p>Remember: every scientist improves through iteration. Apply this feedback, and your next submission will be even stronger!</p>
-            <br/>
-            <p>Keep experimenting,<br/>Your Science Teacher</p>
-          </div>
-        `,
-      });
-    } catch (emailErr: unknown) {
-      const err = emailErr as Error;
-      console.error('Failed to send email:', err);
+          `,
+        });
+      } catch (emailErr: unknown) {
+        const err = emailErr as Error;
+        console.error('Failed to send email:', err);
+      }
     }
 
     return NextResponse.json({ success: true, score: aiScore });
