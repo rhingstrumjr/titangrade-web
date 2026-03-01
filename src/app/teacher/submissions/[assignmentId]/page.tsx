@@ -386,11 +386,10 @@ export default function SubmissionsView() {
                                               e.stopPropagation();
                                               toggleExemplar(sub.id, sub.is_exemplar, group.email);
                                             }}
-                                            className={`flex items - center justify - center gap - 1.5 transition - colors border px - 3 py - 1.5 rounded - md font - medium text - xs
-                                              ${sub.is_exemplar
+                                            className={`flex items-center justify-center gap-1.5 transition-colors border px-3 py-1.5 rounded-md font-medium text-xs ${sub.is_exemplar
                                                 ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
                                                 : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-amber-600"
-                                              } `}
+                                              }`}
                                           >
                                             <Star size={14} className={sub.is_exemplar ? "fill-amber-500 text-amber-500" : ""} />
                                             {sub.is_exemplar ? "Unmark Exemplar" : "Mark as Exemplar"}
