@@ -465,7 +465,7 @@ export default function TeacherDashboard() {
           </div>
           {!isCreating && (
             <button
-              onClick={() => resetFormState() || setIsCreating(true)}
+              onClick={() => { resetFormState(); setIsCreating(true); }}
               className="bg-indigo-600 border border-transparent text-white hover:bg-indigo-700 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow-md flex items-center"
             >
               <PlusCircle size={18} className="mr-2" /> Create Assignment
