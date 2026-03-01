@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { UploadCloud, CheckCircle2, AlertCircle } from "lucide-react";
+import { UploadCloud, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useParams } from "next/navigation";
 
 export default function SubmitPage() {
@@ -23,6 +23,28 @@ export default function SubmitPage() {
   const [submissionsUsed, setSubmissionsUsed] = useState<number | null>(null);
   const [checkingLimit, setCheckingLimit] = useState(false);
   const [rosterError, setRosterError] = useState("");
+
+  const gradingLoadingTexts = [
+    "Analyzing handwriting...",
+    "Evaluating against rubric...",
+    "Determining final score...",
+    "Applying feedback...",
+    "Almost done..."
+  ];
+  const [gradingTextIndex, setGradingTextIndex] = useState(0);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (submitStatus === "grading") {
+      interval = setInterval(() => {
+        setGradingTextIndex((prev) => {
+          // Stay on the last message if it takes longer
+          return prev < gradingLoadingTexts.length - 1 ? prev + 1 : prev;
+        });
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [submitStatus]);
 
   useEffect(() => {
     async function fetchAssignment() {
@@ -200,6 +222,16 @@ export default function SubmitPage() {
               <b>You will receive an email shortly</b> with your score and feedback!
             </p>
           </div>
+        ) : submitStatus === "uploading" || submitStatus === "grading" ? (
+          <div className="text-center py-12 animate-in fade-in duration-300">
+            <Loader2 className="mx-auto h-16 w-16 text-indigo-500 mb-6 animate-spin" />
+            <h3 className="text-xl font-bold text-gray-900 mb-2 transition-all duration-300 ease-in-out">
+              {submitStatus === "uploading" ? "Uploading Secure File..." : gradingLoadingTexts[gradingTextIndex]}
+            </h3>
+            <p className="text-gray-500 text-sm mt-4 bg-gray-50 inline-block px-4 py-2 rounded-full border border-gray-100">
+              Please do not close this window.
+            </p>
+          </div>
         ) : (
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-4">
@@ -214,7 +246,6 @@ export default function SubmitPage() {
                     setRosterError(""); // clear error on typing
                   }}
                   onBlur={(e) => validateStudentAndLimit(e.target.value)}
-                  disabled={submitStatus === "uploading" || submitStatus === "grading"}
                   className={`mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none sm:text-sm ${rosterError ? "border-red-300 focus:ring-red-500 focus:border-red-500" : "border-gray-300 focus:ring-indigo-500 focus:border-indigo-500"}`}
                   placeholder="johndoe@student.edu"
                 />
@@ -261,7 +292,7 @@ export default function SubmitPage() {
                           multiple
                           accept=".pdf, .png, .jpg, .jpeg"
                           onChange={handleFileChange}
-                          disabled={submitStatus === "uploading" || submitStatus === "grading" || (submissionsUsed !== null && submissionsUsed >= maxAttempts)}
+                          disabled={submissionsUsed !== null && submissionsUsed >= maxAttempts}
                         />
                       </label>
                     </div>
@@ -282,12 +313,10 @@ export default function SubmitPage() {
             <div>
               <button
                 type="submit"
-                disabled={submitStatus === "uploading" || submitStatus === "grading" || files.length === 0 || !name || !!rosterError || (submissionsUsed !== null && submissionsUsed >= maxAttempts) || checkingLimit}
+                disabled={files.length === 0 || !name || !!rosterError || (submissionsUsed !== null && submissionsUsed >= maxAttempts) || checkingLimit}
                 className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
               >
-                {submitStatus === "idle" || submitStatus === "error" ? "Submit Assignment"
-                  : submitStatus === "uploading" ? "Uploading Securely..."
-                    : "AI is Grading (Please Wait)..."}
+                Submit Assignment
               </button>
             </div>
           </form>
