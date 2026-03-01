@@ -15,7 +15,7 @@ async function run() {
             { type: 'text', text: 'Grade this assignment.' },
             {
               type: 'file',
-              data: buffer,
+              data: buffer.toString('base64'),
               mediaType: 'application/pdf',
             },
           ],

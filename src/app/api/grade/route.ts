@@ -100,7 +100,7 @@ export async function POST(req: Request) {
     // 4. Construct AI context
     const studentFileParts = studentFiles.map(sf => ({
       type: 'file' as const,
-      data: sf.buffer,
+      data: sf.buffer.toString('base64'),
       mediaType: sf.mimeType,
     }));
 
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
       const execFiles = await Promise.all(activeExemplars.map(fetchToBuffer));
       const execFileParts = execFiles.map(ef => ({
         type: 'file' as const,
-        data: ef.buffer,
+        data: ef.buffer.toString('base64'),
         mediaType: ef.mimeType,
       }));
 
@@ -141,7 +141,7 @@ export async function POST(req: Request) {
             role: 'user',
             content: [
               { type: 'text', text: `TEACHER APPROVED STUDENT EXEMPLAR:\nThe following attached document is a past student submission that the teacher explicitly marked as a grading exemplar.\nThe teacher gave this submission a SCORE of: ${ex.score}\nThe teacher gave this submission FEEDBACK of: "${ex.feedback}"\nAnalyze this exemplar to understand EXACTLY how the teacher grades this assignment, and mimic this style, stringency, and feedback tone for the current student.` },
-              { type: 'file' as const, data: exFile.buffer, mediaType: exFile.mimeType },
+              { type: 'file' as const, data: exFile.buffer.toString('base64'), mediaType: exFile.mimeType },
             ]
           });
         } catch (e) {
