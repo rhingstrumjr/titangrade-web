@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronRight, FileText, Download, Star, Edit2, X, Save, Send } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronRight, FileText, Download, Star, Edit2, X, Save, Send, RefreshCw, Loader2 } from "lucide-react";
 
 interface Submission {
   id: string;
@@ -15,7 +15,10 @@ interface Submission {
   feedback: string | null;
   status: string;
   is_exemplar: boolean;
+  manually_edited: boolean;
   email_sent: boolean;
+  pre_regrade_score: string | null;
+  pre_regrade_feedback: string | null;
   created_at: string;
 }
 
@@ -39,6 +42,11 @@ export default function SubmissionsView() {
   const [editScore, setEditScore] = useState("");
   const [editFeedback, setEditFeedback] = useState("");
   const [releasingGrades, setReleasingGrades] = useState(false);
+
+  // Regrade state
+  const [regrading, setRegrading] = useState(false);
+  const [showRegradeConfirm, setShowRegradeConfirm] = useState(false);
+  const [regradeProgress, setRegradeProgress] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -97,6 +105,20 @@ export default function SubmissionsView() {
 
   const unreleasedCount = studentGroups.reduce(
     (count, group) => count + group.submissions.filter(s => s.status === 'graded' && !s.email_sent).length,
+    0
+  );
+
+  // Count exemplars across all submissions
+  const exemplarCount = studentGroups.reduce(
+    (count, group) => count + group.submissions.filter(s => s.is_exemplar).length,
+    0
+  );
+
+  // Count eligible submissions for regrade
+  const regradeEligibleCount = studentGroups.reduce(
+    (count, group) => count + group.submissions.filter(s =>
+      s.status === 'graded' && !s.is_exemplar && !s.manually_edited
+    ).length,
     0
   );
 
@@ -204,14 +226,14 @@ export default function SubmissionsView() {
   const saveGradeOverride = async (sub: Submission, email: string) => {
     const { error } = await supabase
       .from('submissions')
-      .update({ score: editScore, feedback: editFeedback })
+      .update({ score: editScore, feedback: editFeedback, manually_edited: true })
       .eq('id', sub.id);
 
     if (!error) {
       setStudentGroups(prevGroups => prevGroups.map(group => {
         if (group.email === email) {
           const updatedSubmissions = group.submissions.map(s =>
-            s.id === sub.id ? { ...s, score: editScore, feedback: editFeedback } : s
+            s.id === sub.id ? { ...s, score: editScore, feedback: editFeedback, manually_edited: true } : s
           );
           return {
             ...group,
@@ -226,6 +248,92 @@ export default function SubmissionsView() {
       console.error("Failed to save grade override", error);
       alert("Failed to save edited grade.");
     }
+  };
+
+  // ── Regrade Handler ──
+  const handleRegrade = async () => {
+    setShowRegradeConfirm(false);
+    setRegrading(true);
+    setRegradeProgress(`Regrading ${regradeEligibleCount} submissions with ${exemplarCount} exemplar${exemplarCount !== 1 ? 's' : ''}...`);
+
+    try {
+      const res = await fetch('/api/regrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignmentId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Regrade failed');
+
+      // Refresh data from DB to get updated scores
+      const { data: subData } = await supabase
+        .from('submissions')
+        .select('*')
+        .eq('assignment_id', assignmentId)
+        .order('created_at', { ascending: true });
+
+      if (subData) {
+        const groups: Record<string, StudentGroup> = {};
+        subData.forEach((sub: Submission) => {
+          if (!groups[sub.student_email]) {
+            groups[sub.student_email] = {
+              email: sub.student_email,
+              name: sub.student_name,
+              submissions: [],
+              latestStatus: sub.status,
+              latestScore: sub.score,
+            };
+          }
+          groups[sub.student_email].submissions.push(sub);
+          groups[sub.student_email].latestStatus = sub.status;
+          groups[sub.student_email].latestScore = sub.score;
+        });
+        const sortedGroups = Object.values(groups).sort((a, b) => a.name.localeCompare(b.name));
+        setStudentGroups(sortedGroups);
+      }
+
+      const msg = data.failures > 0
+        ? `Regraded ${data.count} submissions (${data.failures} failed). Review the updated scores below.`
+        : `Successfully regraded ${data.count} submissions! Review the updated scores below.`;
+
+      alert(msg);
+
+    } catch (e: unknown) {
+      const err = e as Error;
+      alert(`Regrade error: ${err.message}`);
+    }
+
+    setRegrading(false);
+    setRegradeProgress(null);
+  };
+
+  // ── Score Diff Helper ──
+  const ScoreDiff = ({ oldScore, newScore }: { oldScore: string; newScore: string }) => {
+    const parseNum = (s: string) => {
+      const match = s.match(/^([\d.]+)/);
+      return match ? parseFloat(match[1]) : null;
+    };
+    const oldNum = parseNum(oldScore);
+    const newNum = parseNum(newScore);
+
+    let color = 'text-gray-500 bg-gray-50 border-gray-200';
+    let arrow = '→';
+    if (oldNum !== null && newNum !== null) {
+      if (newNum > oldNum) {
+        color = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+        arrow = '↑';
+      } else if (newNum < oldNum) {
+        color = 'text-red-700 bg-red-50 border-red-200';
+        arrow = '↓';
+      }
+    }
+
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${color}`}>
+        {oldScore} {arrow} {newScore}
+      </span>
+    );
   };
 
   return (
@@ -243,6 +351,34 @@ export default function SubmissionsView() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Exemplar Badge */}
+            <div className="relative group">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${exemplarCount > 0 ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
+                <Star size={14} className={exemplarCount > 0 ? 'fill-amber-500 text-amber-500' : ''} />
+                {exemplarCount} Exemplar{exemplarCount !== 1 ? 's' : ''}
+              </span>
+              {exemplarCount > 0 && exemplarCount < 5 && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  We recommend 5+ exemplars spanning a range of scores
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
+                </div>
+              )}
+            </div>
+
+            {/* Regrade Button */}
+            <button
+              onClick={() => setShowRegradeConfirm(true)}
+              disabled={regrading || regradeEligibleCount === 0}
+              className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+            >
+              {regrading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <RefreshCw size={16} />
+              )}
+              {regrading ? 'Regrading...' : `Regrade (${regradeEligibleCount})`}
+            </button>
+
             {unreleasedCount > 0 && (
               <button
                 onClick={handleReleaseGrades}
@@ -263,6 +399,63 @@ export default function SubmissionsView() {
             </button>
           </div>
         </div>
+
+        {/* Regrade Confirmation Modal */}
+        {showRegradeConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowRegradeConfirm(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
+                  <RefreshCw size={20} className="text-purple-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900">Regrade with Exemplars</h3>
+              </div>
+
+              <div className="space-y-3 mb-6">
+                <p className="text-sm text-gray-600">
+                  The AI will re-grade <strong>{regradeEligibleCount} submission{regradeEligibleCount !== 1 ? 's' : ''}</strong> using
+                  {' '}<strong>{exemplarCount} exemplar{exemplarCount !== 1 ? 's' : ''}</strong> as calibration data.
+                </p>
+
+                {exemplarCount === 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                    <strong>⚠️ No exemplars marked.</strong> The AI will use the rubric only (same as initial grading). Star some graded submissions first for better calibration.
+                  </div>
+                )}
+
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 space-y-1">
+                  <p>✅ Exemplar submissions will <strong>not</strong> be regraded</p>
+                  <p>✅ Manually edited grades will <strong>not</strong> be changed</p>
+                  <p>✅ Already-emailed students will receive an <strong>updated grade</strong> email</p>
+                  <p>✅ Submission limits are <strong>not</strong> affected</p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowRegradeConfirm(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRegrade}
+                  className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                >
+                  Regrade {regradeEligibleCount} Submissions
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Regrade Progress Banner */}
+        {regrading && regradeProgress && (
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-center gap-3 animate-pulse">
+            <Loader2 size={20} className="text-purple-600 animate-spin" />
+            <p className="text-sm font-medium text-purple-800">{regradeProgress}</p>
+          </div>
+        )}
 
         {loading ? (
           <div className="text-center py-12 text-gray-500">Loading submissions...</div>
@@ -349,7 +542,14 @@ export default function SubmissionsView() {
                                           {index + 1}
                                         </div>
                                         <div>
-                                          <p className="font-medium text-gray-900">Draft {index + 1}</p>
+                                          <div className="flex items-center gap-2">
+                                            <p className="font-medium text-gray-900">Draft {index + 1}</p>
+                                            {sub.manually_edited && (
+                                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 border border-blue-200 text-blue-700">
+                                                Manually Edited
+                                              </span>
+                                            )}
+                                          </div>
                                           <p className="text-xs text-gray-500">{new Date(sub.created_at).toLocaleString()}</p>
                                         </div>
                                       </div>
@@ -371,6 +571,12 @@ export default function SubmissionsView() {
                                             <div className="text-center">
                                               <p className="text-xs text-gray-500 uppercase font-semibold">Score</p>
                                               <p className="font-bold text-gray-900">{sub.score}</p>
+                                              {/* Before/After diff pill */}
+                                              {sub.pre_regrade_score && (
+                                                <div className="mt-1">
+                                                  <ScoreDiff oldScore={sub.pre_regrade_score} newScore={sub.score} />
+                                                </div>
+                                              )}
                                             </div>
                                           )
                                         ) : sub.status === 'pending' ? (
@@ -387,8 +593,8 @@ export default function SubmissionsView() {
                                               toggleExemplar(sub.id, sub.is_exemplar, group.email);
                                             }}
                                             className={`flex items-center justify-center gap-1.5 transition-colors border px-3 py-1.5 rounded-md font-medium text-xs ${sub.is_exemplar
-                                                ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
-                                                : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-amber-600"
+                                              ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                                              : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-amber-600"
                                               }`}
                                           >
                                             <Star size={14} className={sub.is_exemplar ? "fill-amber-500 text-amber-500" : ""} />
@@ -420,15 +626,30 @@ export default function SubmissionsView() {
                                             </div>
                                           </>
                                         ) : (
-                                          <div className="flex justify-between items-start gap-4">
-                                            <div className="flex-1">
-                                              <p className="text-xs text-gray-500 uppercase font-semibold mb-1">Feedback</p>
-                                              <p className="text-gray-700 italic">&quot;{sub.feedback}&quot;</p>
+                                          <>
+                                            <div className="flex justify-between items-start gap-4">
+                                              <div className="flex-1">
+                                                <p className="text-xs text-gray-500 uppercase font-semibold mb-1">Feedback</p>
+                                                <p className="text-gray-700 italic">&quot;{sub.feedback}&quot;</p>
+                                              </div>
+                                              <button onClick={(e) => { e.stopPropagation(); startEditing(sub); }} className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-indigo-600 transition-colors bg-white border border-gray-200 hover:border-indigo-200 px-3 py-1.5 rounded-md relative z-10">
+                                                <Edit2 size={14} /> Edit Grade
+                                              </button>
                                             </div>
-                                            <button onClick={(e) => { e.stopPropagation(); startEditing(sub); }} className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-indigo-600 transition-colors bg-white border border-gray-200 hover:border-indigo-200 px-3 py-1.5 rounded-md relative z-10">
-                                              <Edit2 size={14} /> Edit Grade
-                                            </button>
-                                          </div>
+
+                                            {/* Before/After Feedback Comparison (expandable) */}
+                                            {sub.pre_regrade_feedback && (
+                                              <details className="mt-2">
+                                                <summary className="cursor-pointer text-xs font-medium text-purple-600 hover:text-purple-800 transition-colors">
+                                                  View previous feedback (before regrade)
+                                                </summary>
+                                                <div className="mt-2 bg-purple-50 border border-purple-100 rounded-lg p-3">
+                                                  <p className="text-xs text-purple-500 uppercase font-semibold mb-1">Previous Feedback</p>
+                                                  <p className="text-sm text-purple-800 italic">&quot;{sub.pre_regrade_feedback}&quot;</p>
+                                                </div>
+                                              </details>
+                                            )}
+                                          </>
                                         )}
                                       </div>
                                     )}
