@@ -58,6 +58,7 @@ export async function POST(req: Request) {
     if (shouldSendEmail) {
       try {
         const breakdownHtml = buildBreakdownHtml(result.CategoryScores, result.SkillAssessments);
+        const formattedFeedback = result.Feedback.replace(/\n/g, '<br/>');
         await resend.emails.send({
           from: 'TitanGrade <teacher@titangrade.org>',
           to: [student_email],
@@ -71,7 +72,7 @@ export async function POST(req: Request) {
               <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <h1 style="margin-top: 0; color: #111827;">Score: ${result.Score}</h1>
                 <h3 style="margin-bottom: 5px;">Feedback:</h3>
-                <p style="margin-top: 0; line-height: 1.5;">${result.Feedback}</p>
+                <p style="margin-top: 0; line-height: 1.5;">${formattedFeedback}</p>
                 
                 ${breakdownHtml}
                 
