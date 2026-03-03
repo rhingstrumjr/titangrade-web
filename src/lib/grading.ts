@@ -4,11 +4,26 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 
 // Shared types
+export interface CategoryScore {
+  category: string;
+  earned: number;
+  possible: number;
+}
+
+export interface SkillAssessment {
+  level: string;
+  dimension: string;
+  skill: string;
+  status: 'demonstrated' | 'not_demonstrated' | 'partial' | 'not_assessed';
+}
+
 export interface GradeResult {
   Score: string;
   Feedback: string;
   Transcription: string[];
   Reasoning: string[];
+  CategoryScores?: CategoryScore[];
+  SkillAssessments?: SkillAssessment[];
 }
 
 export interface AssignmentData {
@@ -125,6 +140,28 @@ export async function gradeSubmission(
 
   }
 
+  // Per-category / per-skill scoring instructions
+  let categoryInstructions = '';
+  if (grading_framework === 'marzano') {
+    categoryInstructions = `
+    SKILL ASSESSMENT: For each skill listed in the proficiency scale at levels 2.0, 3.0, and 4.0, report whether the student demonstrated it on this test.
+    Identify the NGSS dimension for each skill: SEP (Science and Engineering Practices), DCI (Disciplinary Core Ideas), or CCC (Crosscutting Concepts).
+    Use the exact skill text from the proficiency scale.
+    Status options:
+    - "demonstrated": Clear evidence the student can do this
+    - "not_demonstrated": This skill was assessed on the test but the student did not show it
+    - "partial": Some evidence but incomplete
+    - "not_assessed": This skill from the proficiency scale was NOT tested on this particular assessment
+    `;
+  } else {
+    categoryInstructions = `
+    PER-CATEGORY SCORING: You MUST break down your score by rubric criterion.
+    For each criterion in the rubric, report the earned points and possible points separately.
+    The sum of all earned points across categories must equal your total Score.
+    If the rubric has sections like "Scientific Question (10 pts)", "Hypothesis (10 pts)", etc., each becomes a category.
+    `;
+  }
+
   const socraticInstructions = is_socratic ? `
   🚨 CRITICAL SOCRATIC TUTOR DIRECTIVE 🚨
   The teacher has enabled Socratic Tutor Mode. YOU MUST NEVER REVEAL THE CORRECT ANSWER DIRECTLY if the student got it wrong.
@@ -165,6 +202,7 @@ export async function gradeSubmission(
   ${socraticInstructions}
   
   ${frameworkInstructions}
+  ${categoryInstructions}
   ${rubricTextBlock}`;
 
   // Build AI message context
@@ -239,23 +277,53 @@ export async function gradeSubmission(
     }
   }
 
+  // Build the schema conditionally based on grading framework
+  const baseSchemaFields = {
+    Transcription: z.array(z.string()).describe("A physical visual extraction step. For each question: 1) Identify question number. 2) If Exemplar exists, note the expected answer. 3) Search area for physical marks. 4) Use expected answer as context to decode messy handwriting. 5) For multiple choice, explicitly dismiss unmarked options before declaring one is circled. 6) If blank, state 'BLANK'. Do not hallucinate."),
+    Reasoning: z.array(z.string()).describe("Step-by-step reasoning comparing the Transcription vs the Rubric/Exemplar, then mapping to a score. Do not guess or hallucinate answers."),
+    Score: z.string().describe(`The numeric score the student achieved out of ${max_score}. E.g. "85" or "3.5"`),
+    Feedback: z.string().describe('2-4 sentences: specific, encouraging, actionable, rubric-referenced feedback'),
+  };
+
+  const categorySchemaFields = grading_framework === 'marzano'
+    ? {
+      SkillAssessments: z.array(z.object({
+        level: z.string().describe("Proficiency level from the scale: '2.0', '3.0', or '4.0'"),
+        dimension: z.string().describe("NGSS dimension: 'SEP' (Science and Engineering Practices), 'DCI' (Disciplinary Core Ideas), or 'CCC' (Crosscutting Concepts)"),
+        skill: z.string().describe("The specific skill text from the proficiency scale"),
+        status: z.enum(['demonstrated', 'not_demonstrated', 'partial', 'not_assessed'])
+          .describe("demonstrated = clear evidence, not_demonstrated = assessed but student didn't show it, partial = some evidence, not_assessed = skill not tested on this assessment"),
+      })).describe("Per-skill assessment from the Marzano proficiency scale. One entry per skill at levels 2.0, 3.0, and 4.0."),
+    }
+    : {
+      CategoryScores: z.array(z.object({
+        category: z.string().describe("The rubric criterion name, e.g. 'Scientific Question' or 'Data / Observations'"),
+        earned: z.number().describe("Points earned for this criterion"),
+        possible: z.number().describe("Maximum points possible for this criterion"),
+      })).describe("Per-rubric-category score breakdown. One entry per rubric criterion. Sum of earned must equal total Score."),
+    };
+
   // Call Gemini
   const { object } = await generateObject({
     model: google('gemini-2.5-flash'),
     system: systemPrompt,
     messages: aiMessages,
+    temperature: 0.1,
     schema: z.object({
-      Transcription: z.array(z.string()).describe("A physical visual extraction step. For each question: 1) Identify question number. 2) If Exemplar exists, note the expected answer. 3) Search area for physical marks. 4) Use expected answer as context to decode messy handwriting. 5) For multiple choice, explicitly dismiss unmarked options before declaring one is circled. 6) If blank, state 'BLANK'. Do not hallucinate."),
-      Reasoning: z.array(z.string()).describe("Step-by-step reasoning comparing the Transcription vs the Rubric/Exemplar, then mapping to a score. Do not guess or hallucinate answers."),
-      Score: z.string().describe(`The numeric score the student achieved out of ${max_score}. E.g. "85" or "3.5"`),
-      Feedback: z.string().describe('2-4 sentences: specific, encouraging, actionable, rubric-referenced feedback'),
+      ...baseSchemaFields,
+      ...categorySchemaFields,
     }),
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = object as any;
+
   return {
-    Score: `${object.Score}/${max_score}`,
-    Feedback: object.Feedback,
-    Transcription: object.Transcription,
-    Reasoning: object.Reasoning,
+    Score: `${result.Score}/${max_score}`,
+    Feedback: result.Feedback,
+    Transcription: result.Transcription,
+    Reasoning: result.Reasoning,
+    CategoryScores: result.CategoryScores ?? undefined,
+    SkillAssessments: result.SkillAssessments ?? undefined,
   };
 }

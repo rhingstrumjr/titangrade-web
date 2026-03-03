@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { buildBreakdownHtml } from '@/lib/email-helpers';
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
 
     for (const sub of submissions) {
       const { title, is_socratic } = sub.assignment;
+      const breakdownHtml = buildBreakdownHtml(sub.category_scores, sub.skill_assessments);
 
       const emailPromise = resend.emails.send({
         from: 'TitanGrade <teacher@titangrade.org>',
@@ -50,6 +52,8 @@ export async function POST(req: Request) {
               <h1 style="margin-top: 0; color: #111827;">Score: ${sub.score}</h1>
               <h3 style="margin-bottom: 5px;">Feedback:</h3>
               <p style="margin-top: 0; line-height: 1.5;">${sub.feedback}</p>
+              
+              ${breakdownHtml}
               
               ${!is_socratic ? `
               <p style="margin-top: 15px; font-size: 0.9em; color: #666;">

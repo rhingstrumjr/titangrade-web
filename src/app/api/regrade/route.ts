@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { gradeSubmission } from '@/lib/grading';
+import { buildBreakdownHtml } from '@/lib/email-helpers';
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
 export async function POST(req: Request) {
   try {
-    const { assignmentId } = await req.json();
+    const { assignmentId, submissionIds } = await req.json();
 
     if (!assignmentId) {
       return NextResponse.json({ error: 'Missing assignmentId' }, { status: 400 });
@@ -24,15 +25,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // 2. Fetch all eligible submissions for regrading
+    // 2. Fetch eligible submissions for regrading
     // Eligible = graded + not exemplar + not manually edited
-    const { data: submissions, error: fetchError } = await supabase
+    let query = supabase
       .from('submissions')
       .select('*')
       .eq('assignment_id', assignmentId)
       .eq('status', 'graded')
       .eq('is_exemplar', false)
       .eq('manually_edited', false);
+
+    // If specific IDs were provided, filter to just those
+    if (submissionIds && Array.isArray(submissionIds) && submissionIds.length > 0) {
+      query = query.in('id', submissionIds);
+    }
+
+    const { data: submissions, error: fetchError } = await query;
 
     if (fetchError) {
       console.error('Failed to fetch submissions for regrade:', fetchError);
@@ -67,6 +75,8 @@ export async function POST(req: Request) {
             pre_regrade_feedback: oldFeedback,
             score: result.Score,
             feedback: result.Feedback,
+            category_scores: result.CategoryScores || null,
+            skill_assessments: result.SkillAssessments || null,
           })
           .eq('id', sub.id);
 
@@ -79,6 +89,7 @@ export async function POST(req: Request) {
         // If the original grade was already emailed, send an "Updated Grade" email
         if (sub.email_sent) {
           try {
+            const breakdownHtml = buildBreakdownHtml(result.CategoryScores, result.SkillAssessments);
             await resend.emails.send({
               from: 'TitanGrade <teacher@titangrade.org>',
               to: [sub.student_email],
@@ -97,6 +108,8 @@ export async function POST(req: Request) {
                   <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
                     <h3 style="margin-bottom: 5px;">Updated Feedback:</h3>
                     <p style="margin-top: 0; line-height: 1.5;">${result.Feedback}</p>
+                    
+                    ${breakdownHtml}
                   </div>
                   
                   <p style="font-size: 13px; color: #6b7280;">

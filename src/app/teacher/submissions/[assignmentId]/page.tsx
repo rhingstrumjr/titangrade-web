@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronRight, FileText, Download, Star, Edit2, X, Save, Send, RefreshCw, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronRight, FileText, Download, Star, Edit2, X, Save, Send, RefreshCw, Loader2, BarChart3, Pencil } from "lucide-react";
 
 interface Submission {
   id: string;
@@ -19,6 +19,8 @@ interface Submission {
   email_sent: boolean;
   pre_regrade_score: string | null;
   pre_regrade_feedback: string | null;
+  category_scores: { category: string; earned: number; possible: number }[] | null;
+  skill_assessments: { level: string; dimension: string; skill: string; status: string }[] | null;
   created_at: string;
 }
 
@@ -47,20 +49,29 @@ export default function SubmissionsView() {
   const [regrading, setRegrading] = useState(false);
   const [showRegradeConfirm, setShowRegradeConfirm] = useState(false);
   const [regradeProgress, setRegradeProgress] = useState<string | null>(null);
+  const [selectedForRegrade, setSelectedForRegrade] = useState<Set<string>>(new Set());
+
+  // Submission limit state
+  const [maxAttempts, setMaxAttempts] = useState<number>(1);
+  const [editingMaxAttempts, setEditingMaxAttempts] = useState(false);
+  const [tempMaxAttempts, setTempMaxAttempts] = useState<number>(1);
+  const [savingMaxAttempts, setSavingMaxAttempts] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
       if (!assignmentId) return;
 
-      // Fetch assignment title
+      // Fetch assignment title and max_attempts
       const { data: assignData } = await supabase
         .from('assignments')
-        .select('title')
+        .select('title, max_attempts')
         .eq('id', assignmentId)
         .single();
 
       if (assignData) {
         setAssignmentTitle(assignData.title);
+        setMaxAttempts(assignData.max_attempts || 1);
+        setTempMaxAttempts(assignData.max_attempts || 1);
       }
 
       // Fetch submissions
@@ -92,6 +103,16 @@ export default function SubmissionsView() {
         // Convert to array and sort by name
         const sortedGroups = Object.values(groups).sort((a, b) => a.name.localeCompare(b.name));
         setStudentGroups(sortedGroups);
+
+        // Auto-select latest submission per student for regrade
+        const initialSelection = new Set<string>();
+        sortedGroups.forEach(group => {
+          const latest = group.submissions[group.submissions.length - 1];
+          if (latest.status === 'graded' && !latest.is_exemplar && !latest.manually_edited) {
+            initialSelection.add(latest.id);
+          }
+        });
+        setSelectedForRegrade(initialSelection);
       }
       setLoading(false);
     }
@@ -127,13 +148,35 @@ export default function SubmissionsView() {
 
     const headers = ["Student Name", "Email", "Latest Score", "Latest Status", "Number of Drafts"];
 
-    const rows = studentGroups.map(group => [
-      `"${group.name}"`,
-      `"${group.email}"`,
-      `"${group.latestScore || ''}"`,
-      `"${group.latestStatus}"`,
-      `"${group.submissions.length}"`
-    ]);
+    // Detect dynamic category/skill columns from the first group's latest submission
+    const sampleSub = studentGroups[0]?.submissions[studentGroups[0].submissions.length - 1];
+    const hasCategoryScores = sampleSub?.category_scores && sampleSub.category_scores.length > 0;
+    const hasSkillAssessments = sampleSub?.skill_assessments && sampleSub.skill_assessments.length > 0;
+
+    if (hasCategoryScores) {
+      sampleSub.category_scores!.forEach(cs => headers.push(`"${cs.category}"`));
+    } else if (hasSkillAssessments) {
+      sampleSub.skill_assessments!.forEach(sa => headers.push(`"${sa.level} ${sa.dimension}: ${sa.skill}"`));
+    }
+
+    const rows = studentGroups.map(group => {
+      const latest = group.submissions[group.submissions.length - 1];
+      const row = [
+        `"${group.name}"`,
+        `"${group.email}"`,
+        `"${group.latestScore || ''}"`,
+        `"${group.latestStatus}"`,
+        `"${group.submissions.length}"`
+      ];
+
+      if (hasCategoryScores && latest.category_scores) {
+        latest.category_scores.forEach(cs => row.push(`"${cs.earned}/${cs.possible}"`));
+      } else if (hasSkillAssessments && latest.skill_assessments) {
+        latest.skill_assessments.forEach(sa => row.push(`"${sa.status}"`));
+      }
+
+      return row;
+    });
 
     const csvContent = [
       headers.join(","),
@@ -149,6 +192,86 @@ export default function SubmissionsView() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // ── Category Breakdown Component ──
+  const CategoryBreakdown = ({ sub }: { sub: Submission }) => {
+    if (sub.skill_assessments && sub.skill_assessments.length > 0) {
+      // Marzano mode: skill assessment
+      const levels = ['2.0', '3.0', '4.0'];
+      const levelLabels: Record<string, string> = {
+        '2.0': '2.0 — Foundational',
+        '3.0': '3.0 — Target',
+        '4.0': '4.0 — Transfer',
+      };
+      const statusDisplay: Record<string, { icon: string; color: string; label: string }> = {
+        'demonstrated': { icon: '✅', color: 'text-emerald-700', label: 'Demonstrated' },
+        'partial': { icon: '⚠️', color: 'text-amber-600', label: 'Partial' },
+        'not_demonstrated': { icon: '❌', color: 'text-red-600', label: 'Not Demonstrated' },
+        'not_assessed': { icon: '⬜', color: 'text-gray-400', label: 'Not Assessed' },
+      };
+
+      return (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1">
+            <BarChart3 size={14} /> Skill Assessment
+          </summary>
+          <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+            {levels.map(level => {
+              const skills = sub.skill_assessments!.filter(sa => sa.level === level);
+              if (skills.length === 0) return null;
+              return (
+                <div key={level}>
+                  <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100">
+                    <span className="text-xs font-bold text-indigo-700">{levelLabels[level] || `Level ${level}`}</span>
+                  </div>
+                  {skills.map((sa, i) => {
+                    const display = statusDisplay[sa.status] || statusDisplay['not_assessed'];
+                    return (
+                      <div key={i} className="flex items-center gap-3 px-3 py-2 border-b border-gray-100 last:border-b-0">
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase w-8 flex-shrink-0">{sa.dimension}</span>
+                        <span className="text-xs text-gray-700 flex-1">{sa.skill}</span>
+                        <span className={`text-xs font-medium ${display.color} whitespace-nowrap`}>
+                          {display.icon} {display.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </details>
+      );
+    }
+
+    if (sub.category_scores && sub.category_scores.length > 0) {
+      // Standard mode: category scores
+      return (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1">
+            <BarChart3 size={14} /> Score Breakdown
+          </summary>
+          <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+            {sub.category_scores.map((cs, i) => {
+              const pct = cs.possible > 0 ? Math.round((cs.earned / cs.possible) * 100) : 0;
+              const barColor = pct >= 80 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-500';
+              return (
+                <div key={i} className="flex items-center gap-3 px-3 py-2 border-b border-gray-100 last:border-b-0">
+                  <span className="text-xs text-gray-700 flex-1">{cs.category}</span>
+                  <span className="text-xs font-bold text-gray-900 w-16 text-right">{cs.earned}/{cs.possible}</span>
+                  <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </details>
+      );
+    }
+
+    return null;
   };
 
   const toggleExemplar = async (submissionId: string, currentStatus: boolean, studentEmail: string) => {
@@ -250,17 +373,71 @@ export default function SubmissionsView() {
     }
   };
 
+  // ── Submission Limit Handler ──
+  const handleSaveMaxAttempts = async () => {
+    setSavingMaxAttempts(true);
+    const { error } = await supabase
+      .from('assignments')
+      .update({ max_attempts: tempMaxAttempts })
+      .eq('id', assignmentId);
+
+    if (!error) {
+      setMaxAttempts(tempMaxAttempts);
+      setEditingMaxAttempts(false);
+    } else {
+      alert('Failed to update submission limit');
+    }
+    setSavingMaxAttempts(false);
+  };
+
+  // ── Regrade Selection Helpers ──
+  const toggleRegradeSelection = (subId: string) => {
+    setSelectedForRegrade(prev => {
+      const next = new Set(prev);
+      if (next.has(subId)) {
+        next.delete(subId);
+      } else {
+        next.add(subId);
+      }
+      return next;
+    });
+  };
+
+  const selectAllForRegrade = () => {
+    const allEligible = new Set<string>();
+    studentGroups.forEach(group => {
+      group.submissions.forEach(s => {
+        if (s.status === 'graded' && !s.is_exemplar && !s.manually_edited) {
+          allEligible.add(s.id);
+        }
+      });
+    });
+    setSelectedForRegrade(allEligible);
+  };
+
+  const selectLatestForRegrade = () => {
+    const latestOnly = new Set<string>();
+    studentGroups.forEach(group => {
+      const latest = group.submissions[group.submissions.length - 1];
+      if (latest.status === 'graded' && !latest.is_exemplar && !latest.manually_edited) {
+        latestOnly.add(latest.id);
+      }
+    });
+    setSelectedForRegrade(latestOnly);
+  };
+
   // ── Regrade Handler ──
   const handleRegrade = async () => {
     setShowRegradeConfirm(false);
     setRegrading(true);
-    setRegradeProgress(`Regrading ${regradeEligibleCount} submissions with ${exemplarCount} exemplar${exemplarCount !== 1 ? 's' : ''}...`);
+    const count = selectedForRegrade.size;
+    setRegradeProgress(`Regrading ${count} submission${count !== 1 ? 's' : ''} with ${exemplarCount} exemplar${exemplarCount !== 1 ? 's' : ''}...`);
 
     try {
       const res = await fetch('/api/regrade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignmentId }),
+        body: JSON.stringify({ assignmentId, submissionIds: Array.from(selectedForRegrade) }),
       });
 
       const data = await res.json();
@@ -347,7 +524,38 @@ export default function SubmissionsView() {
               <ArrowLeft size={16} className="mr-1" /> Back to Dashboard
             </Link>
             <h1 className="text-3xl font-extrabold text-indigo-900 tracking-tight">Submissions</h1>
-            <p className="text-gray-500 mt-1">{assignmentTitle}</p>
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-gray-500">{assignmentTitle}</p>
+              {/* Inline submission limit editor */}
+              {editingMaxAttempts ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={tempMaxAttempts}
+                    onChange={(e) => setTempMaxAttempts(parseInt(e.target.value) || 1)}
+                    min={1}
+                    className="w-16 border border-indigo-300 rounded px-2 py-0.5 text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    autoFocus
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveMaxAttempts()}
+                  />
+                  <button onClick={handleSaveMaxAttempts} disabled={savingMaxAttempts} className="text-indigo-600 hover:text-indigo-800">
+                    <Save size={14} />
+                  </button>
+                  <button onClick={() => { setEditingMaxAttempts(false); setTempMaxAttempts(maxAttempts); }} className="text-gray-400 hover:text-gray-600">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setEditingMaxAttempts(true)}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full hover:bg-indigo-100 transition-colors"
+                  title="Click to change submission limit"
+                >
+                  Max: {maxAttempts} submission{maxAttempts !== 1 ? 's' : ''}
+                  <Pencil size={10} />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -368,7 +576,7 @@ export default function SubmissionsView() {
             {/* Regrade Button */}
             <button
               onClick={() => setShowRegradeConfirm(true)}
-              disabled={regrading || regradeEligibleCount === 0}
+              disabled={regrading || selectedForRegrade.size === 0}
               className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
             >
               {regrading ? (
@@ -376,7 +584,7 @@ export default function SubmissionsView() {
               ) : (
                 <RefreshCw size={16} />
               )}
-              {regrading ? 'Regrading...' : `Regrade (${regradeEligibleCount})`}
+              {regrading ? 'Regrading...' : `Regrade (${selectedForRegrade.size})`}
             </button>
 
             {unreleasedCount > 0 && (
@@ -413,9 +621,32 @@ export default function SubmissionsView() {
 
               <div className="space-y-3 mb-6">
                 <p className="text-sm text-gray-600">
-                  The AI will re-grade <strong>{regradeEligibleCount} submission{regradeEligibleCount !== 1 ? 's' : ''}</strong> using
+                  The AI will re-grade <strong>{selectedForRegrade.size} submission{selectedForRegrade.size !== 1 ? 's' : ''}</strong> using
                   {' '}<strong>{exemplarCount} exemplar{exemplarCount !== 1 ? 's' : ''}</strong> as calibration data.
                 </p>
+
+                {/* Selection controls */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Select:</span>
+                  <button
+                    onClick={selectLatestForRegrade}
+                    className="text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-full border border-indigo-200 transition-colors"
+                  >
+                    Latest Only
+                  </button>
+                  <button
+                    onClick={selectAllForRegrade}
+                    className="text-xs font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200 transition-colors"
+                  >
+                    All Eligible ({regradeEligibleCount})
+                  </button>
+                  <button
+                    onClick={() => setSelectedForRegrade(new Set())}
+                    className="text-xs font-medium text-gray-400 hover:text-gray-600 px-2.5 py-1 transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
 
                 {exemplarCount === 0 && (
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
@@ -440,9 +671,10 @@ export default function SubmissionsView() {
                 </button>
                 <button
                   onClick={handleRegrade}
-                  className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                  disabled={selectedForRegrade.size === 0}
+                  className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg transition-colors"
                 >
-                  Regrade {regradeEligibleCount} Submissions
+                  Regrade {selectedForRegrade.size} Submission{selectedForRegrade.size !== 1 ? 's' : ''}
                 </button>
               </div>
             </div>
@@ -538,6 +770,17 @@ export default function SubmissionsView() {
                                   <div key={sub.id} className="bg-white border text-sm border-gray-200 rounded-lg p-4 flex flex-col gap-4 shadow-sm">
                                     <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-4">
+                                        {/* Regrade checkbox — only for eligible submissions */}
+                                        {sub.status === 'graded' && !sub.is_exemplar && !sub.manually_edited && (
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedForRegrade.has(sub.id)}
+                                            onChange={() => toggleRegradeSelection(sub.id)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded cursor-pointer"
+                                            title="Include in regrade"
+                                          />
+                                        )}
                                         <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
                                           {index + 1}
                                         </div>
@@ -649,6 +892,9 @@ export default function SubmissionsView() {
                                                 </div>
                                               </details>
                                             )}
+
+                                            {/* Category/Skill Breakdown */}
+                                            <CategoryBreakdown sub={sub} />
                                           </>
                                         )}
                                       </div>

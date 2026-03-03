@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { gradeSubmission, fetchToBuffer } from '@/lib/grading';
+import { buildBreakdownHtml } from '@/lib/email-helpers';
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
@@ -43,6 +44,8 @@ export async function POST(req: Request) {
         feedback: result.Feedback,
         status: 'graded',
         email_sent: shouldSendEmail,
+        category_scores: result.CategoryScores || null,
+        skill_assessments: result.SkillAssessments || null,
       })
       .eq('id', submissionId);
 
@@ -53,6 +56,7 @@ export async function POST(req: Request) {
     // 4. Send Email via Resend (if auto-send is enabled)
     if (shouldSendEmail) {
       try {
+        const breakdownHtml = buildBreakdownHtml(result.CategoryScores, result.SkillAssessments);
         await resend.emails.send({
           from: 'TitanGrade <teacher@titangrade.org>',
           to: [student_email],
@@ -67,6 +71,8 @@ export async function POST(req: Request) {
                 <h1 style="margin-top: 0; color: #111827;">Score: ${result.Score}</h1>
                 <h3 style="margin-bottom: 5px;">Feedback:</h3>
                 <p style="margin-top: 0; line-height: 1.5;">${result.Feedback}</p>
+                
+                ${breakdownHtml}
                 
                 ${!is_socratic ? `
                 <details style="margin-top: 15px;">

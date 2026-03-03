@@ -785,37 +785,34 @@ export default function TeacherDashboard() {
                       <h3 className="text-lg font-bold text-gray-900 truncate pr-2" title={assignment.title}>
                         {assignment.title}
                       </h3>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          handleDeleteAssignment(assignment.id);
-                        }}
-                        disabled={deletingId === assignment.id}
-                        className="text-gray-400 hover:text-red-600 transition-colors p-1.5 rounded-md hover:bg-red-50 focus:outline-none flex-shrink-0"
-                        title="Delete Assignment"
-                      >
-                        {deletingId === assignment.id ? (
-                          <svg className="animate-spin h-4 w-4 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                    <div className="flex justify-between items-start mb-2 mt-[-24px] pointer-events-none">
-                      <div className="flex-grow"></div>
-                      <div className="flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity pointer-events-auto group-hover:opacity-100 pr-8">
+                      <div className="flex items-center gap-1 flex-shrink-0">
                         <button
                           onClick={(e) => {
                             e.preventDefault();
                             handleEditAssignment(assignment);
                           }}
-                          className="text-gray-400 hover:text-indigo-600 transition-colors p-1.5 rounded-md hover:bg-indigo-50 focus:outline-none flex-shrink-0"
+                          className="text-gray-400 hover:text-indigo-600 transition-colors p-1.5 rounded-md hover:bg-indigo-50 focus:outline-none"
                           title="Edit Assignment"
                         >
                           <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleDeleteAssignment(assignment.id);
+                          }}
+                          disabled={deletingId === assignment.id}
+                          className="text-gray-400 hover:text-red-600 transition-colors p-1.5 rounded-md hover:bg-red-50 focus:outline-none flex-shrink-0"
+                          title="Delete Assignment"
+                        >
+                          {deletingId === assignment.id ? (
+                            <svg className="animate-spin h-4 w-4 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
                         </button>
                       </div>
                     </div>
