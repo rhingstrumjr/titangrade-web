@@ -616,7 +616,7 @@ export default function TeacherDashboard() {
 
                 {rubricType === "text" ? (
                   <textarea
-                    required
+                    required={!editingAssignment}
                     value={newRubricText}
                     onChange={(e) => setNewRubricText(e.target.value)}
                     placeholder="Paste your rubric and evaluation criteria here. The more detailed, the better the AI will grade."
@@ -632,7 +632,7 @@ export default function TeacherDashboard() {
                           <input
                             type="file"
                             className="sr-only"
-                            required
+                            required={!editingAssignment}
                             multiple
                             accept=".pdf, .png, .jpg, .jpeg"
                             onChange={(e) => {
