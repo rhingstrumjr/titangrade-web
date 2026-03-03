@@ -165,9 +165,12 @@ export async function gradeSubmission(
   const socraticInstructions = is_socratic ? `
   🚨 CRITICAL SOCRATIC TUTOR DIRECTIVE 🚨
   The teacher has enabled Socratic Tutor Mode. YOU MUST NEVER REVEAL THE CORRECT ANSWER DIRECTLY if the student got it wrong.
-  Instead of stating the correct answer or explicitly correcting them, you must ask a guiding question, point out a logical flaw, or refer them back to a specific concept to help them realize their own mistake. 
+  If the student got the question wrong, instead of stating the correct answer or explicitly correcting them, you must ask a guiding question, point out a logical flaw, or refer them back to a specific concept to help them realize their own mistake. 
   Your feedback must act like a 1-on-1 tutor guiding them to the 'aha' moment. Focus heavily on 'What did they confuse?' and 'How can I gently nudge them?'
-  ` : ``;
+  It is entirely okay to tell the student if they got the question correct.
+  ` : `
+  If the student got the question correct, celebrate it. If the student got the question wrong, you may explicitly reveal the correct answer and explain why it is correct.
+  `;
 
   // Build rubric text for system prompt (only text-based rubrics go here)
   const rubricTextBlock = textRubrics.length > 0
@@ -181,7 +184,7 @@ export async function gradeSubmission(
   
   SCORING BEHAVIOR: Grade strictly by the rubric with NO generosity bias. If work is missing, the score for that section is 0 — do not give partial credit for "effort" or "attempting." Only the rubric criteria determine the score.
   
-  FEEDBACK BEHAVIOR: Your written feedback should be warm, specific, and encouraging. Always point to exactly one concrete action the student can take to improve. Reference specific questions or sections.
+  FEEDBACK BEHAVIOR: Your written feedback MUST be a detailed walkthrough for EACH question (or each part of the essay/response). Use clear plain-text headers like 'Question 1:' or 'Paragraph 1:' followed by your feedback for that specific part. Always tell the student explicitly if they got the question correct. Note the Socratic rules below for handling wrong answers.
 
   GRADING PROCESS:
   1. STRICT VISUAL EXTRACTION (Context-Aware): Scan the document line-by-line. If an Exemplar Answer Key is provided, you MUST look at what the correct answer is first to establish context for what messy handwriting might say (e.g., if the key says 'Arsenic', use that context to decipher a scribbled word). 
@@ -297,7 +300,7 @@ export async function gradeSubmission(
     Transcription: z.array(z.string()).describe("A physical visual extraction step. For each question: 1) Identify question number. 2) If Exemplar exists, note the expected answer. 3) Search area for physical marks. 4) Use expected answer as context to decode messy handwriting. 5) For multiple choice, explicitly dismiss unmarked options before declaring one is circled. 6) If blank, state 'BLANK'. Do not hallucinate."),
     Reasoning: z.array(z.string()).describe("Step-by-step reasoning comparing the Transcription vs the Rubric/Exemplar, then mapping to a score. Do not guess or hallucinate answers."),
     Score: z.string().describe(`The numeric score the student achieved out of ${max_score}. E.g. "85" or "3.5"`),
-    Feedback: z.string().describe('2-4 sentences: specific, encouraging, actionable, rubric-referenced feedback'),
+    Feedback: z.string().describe('Detailed walkthrough feedback sectioned by question/paragraph using headers. Tell students if they got a question right. If wrong, provide hints or answers according to the system rules.'),
   };
 
   const categorySchemaFields = grading_framework === 'marzano'
