@@ -705,7 +705,14 @@ export default function SubmissionsView() {
                                               rows={3}
                                               className="border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none w-full"
                                             />
-                                            <CategoryBreakdown sub={sub} />
+                                            <CategoryBreakdown
+                                              sub={sub}
+                                              isEditing={true}
+                                              editSkillAssessments={editSkillAssessments}
+                                              setEditSkillAssessments={setEditSkillAssessments}
+                                              editCategoryScores={editCategoryScores}
+                                              setEditCategoryScores={setEditCategoryScores}
+                                            />
 
                                             <div className="flex justify-end gap-2 mt-2">
                                               <button onClick={(e) => { e.stopPropagation(); cancelEditing(); }} className="flex items-center px-3 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors relative z-10">
