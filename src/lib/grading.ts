@@ -184,7 +184,7 @@ export async function gradeSubmission(
   
   SCORING BEHAVIOR: Grade strictly by the rubric with NO generosity bias. If work is missing, the score for that section is 0 — do not give partial credit for "effort" or "attempting." Only the rubric criteria determine the score.
   
-  FEEDBACK BEHAVIOR: Your written feedback MUST be a detailed walkthrough for EACH question (or each part of the essay/response). Use clear plain-text headers like 'Question 1:' or 'Paragraph 1:' followed by your feedback for that specific part. Always tell the student explicitly if they got the question correct. Note the Socratic rules below for handling wrong answers.
+  FEEDBACK BEHAVIOR: Your written feedback MUST be a detailed walkthrough for EACH question (or each part of the essay/response). Use clear plain-text headers like 'Question 1:' or 'Paragraph 1:' followed by your feedback for that specific part. If the student got the question correct, simply write "Correct!" and nothing else to save reading time. Note the Socratic rules below for handling wrong answers.
 
   GRADING PROCESS:
   1. STRICT VISUAL EXTRACTION (Context-Aware): Scan the document line-by-line. If an Exemplar Answer Key is provided, you MUST look at what the correct answer is first to establish context for what messy handwriting might say (e.g., if the key says 'Arsenic', use that context to decipher a scribbled word). 
