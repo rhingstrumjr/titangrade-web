@@ -57,6 +57,12 @@ export default function SubmissionsView() {
   const [tempMaxAttempts, setTempMaxAttempts] = useState<number>(1);
   const [savingMaxAttempts, setSavingMaxAttempts] = useState(false);
 
+  // Category score editing state
+  const [editingCategorySub, setEditingCategorySub] = useState<string | null>(null);
+  const [editCategoryScores, setEditCategoryScores] = useState<{ category: string; earned: number; possible: number }[]>([]);
+  const [editSkillAssessments, setEditSkillAssessments] = useState<{ level: string; dimension: string; skill: string; status: string }[]>([]);
+  const [savingCategories, setSavingCategories] = useState(false);
+
   useEffect(() => {
     async function fetchData() {
       if (!assignmentId) return;
@@ -194,8 +200,34 @@ export default function SubmissionsView() {
     document.body.removeChild(link);
   };
 
-  // ── Category Breakdown Component ──
+  // ── Category Breakdown Component (Editable) ──
   const CategoryBreakdown = ({ sub }: { sub: Submission }) => {
+    const isEditing = editingCategorySub === sub.id;
+    const statusOptions = [
+      { value: 'demonstrated', icon: '✅', label: 'Demonstrated' },
+      { value: 'partial', icon: '⚠️', label: 'Partial' },
+      { value: 'not_demonstrated', icon: '❌', label: 'Not Demonstrated' },
+      { value: 'not_assessed', icon: '⬜', label: 'Not Assessed' },
+    ];
+
+    const startCategoryEdit = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setEditingCategorySub(sub.id);
+      if (sub.skill_assessments && sub.skill_assessments.length > 0) {
+        setEditSkillAssessments(sub.skill_assessments.map(sa => ({ ...sa })));
+      }
+      if (sub.category_scores && sub.category_scores.length > 0) {
+        setEditCategoryScores(sub.category_scores.map(cs => ({ ...cs })));
+      }
+    };
+
+    const cancelCategoryEdit = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setEditingCategorySub(null);
+    };
+
     if (sub.skill_assessments && sub.skill_assessments.length > 0) {
       // Marzano mode: skill assessment
       const levels = ['2.0', '3.0', '4.0'];
@@ -211,14 +243,33 @@ export default function SubmissionsView() {
         'not_assessed': { icon: '⬜', color: 'text-gray-400', label: 'Not Assessed' },
       };
 
+      const displayData = isEditing ? editSkillAssessments : sub.skill_assessments;
+
       return (
-        <details className="mt-3">
+        <details className="mt-3" open={isEditing}>
           <summary className="cursor-pointer text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1">
             <BarChart3 size={14} /> Skill Assessment
+            {!isEditing && sub.status === 'graded' && (
+              <button onClick={startCategoryEdit} className="ml-auto p-0.5 text-gray-400 hover:text-indigo-600 transition-colors" title="Edit skill assessments">
+                <Pencil size={12} />
+              </button>
+            )}
           </summary>
+          {isEditing && (
+            <div className="mt-1 flex items-center gap-2 justify-end">
+              <button onClick={cancelCategoryEdit} className="text-[10px] px-2 py-0.5 rounded bg-gray-200 text-gray-600 hover:bg-gray-300">Cancel</button>
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); saveCategoryOverride(sub); }}
+                disabled={savingCategories}
+                className="text-[10px] px-2 py-0.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1"
+              >
+                {savingCategories ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />} Save
+              </button>
+            </div>
+          )}
           <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
             {levels.map(level => {
-              const skills = sub.skill_assessments!.filter(sa => sa.level === level);
+              const skills = displayData!.filter(sa => sa.level === level);
               if (skills.length === 0) return null;
               return (
                 <div key={level}>
@@ -227,13 +278,32 @@ export default function SubmissionsView() {
                   </div>
                   {skills.map((sa, i) => {
                     const display = statusDisplay[sa.status] || statusDisplay['not_assessed'];
+                    // Find the index in the full array for editing
+                    const fullIdx = displayData!.indexOf(sa);
                     return (
                       <div key={i} className="flex items-center gap-3 px-3 py-2 border-b border-gray-100 last:border-b-0">
                         <span className="text-[10px] font-semibold text-gray-400 uppercase w-8 flex-shrink-0">{sa.dimension}</span>
                         <span className="text-xs text-gray-700 flex-1">{sa.skill}</span>
-                        <span className={`text-xs font-medium ${display.color} whitespace-nowrap`}>
-                          {display.icon} {display.label}
-                        </span>
+                        {isEditing ? (
+                          <select
+                            value={sa.status}
+                            onChange={(e) => {
+                              const updated = [...editSkillAssessments];
+                              updated[fullIdx] = { ...updated[fullIdx], status: e.target.value };
+                              setEditSkillAssessments(updated);
+                            }}
+                            className="text-xs border border-gray-300 rounded px-1 py-0.5 bg-white focus:ring-1 focus:ring-indigo-400"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {statusOptions.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.icon} {opt.label}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className={`text-xs font-medium ${display.color} whitespace-nowrap`}>
+                            {display.icon} {display.label}
+                          </span>
+                        )}
                       </div>
                     );
                   })}
@@ -247,19 +317,57 @@ export default function SubmissionsView() {
 
     if (sub.category_scores && sub.category_scores.length > 0) {
       // Standard mode: category scores
+      const displayData = isEditing ? editCategoryScores : sub.category_scores;
+
       return (
-        <details className="mt-3">
+        <details className="mt-3" open={isEditing}>
           <summary className="cursor-pointer text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1">
             <BarChart3 size={14} /> Score Breakdown
+            {!isEditing && sub.status === 'graded' && (
+              <button onClick={startCategoryEdit} className="ml-auto p-0.5 text-gray-400 hover:text-indigo-600 transition-colors" title="Edit score breakdown">
+                <Pencil size={12} />
+              </button>
+            )}
           </summary>
+          {isEditing && (
+            <div className="mt-1 flex items-center gap-2 justify-end">
+              <button onClick={cancelCategoryEdit} className="text-[10px] px-2 py-0.5 rounded bg-gray-200 text-gray-600 hover:bg-gray-300">Cancel</button>
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); saveCategoryOverride(sub); }}
+                disabled={savingCategories}
+                className="text-[10px] px-2 py-0.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1"
+              >
+                {savingCategories ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />} Save
+              </button>
+            </div>
+          )}
           <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
-            {sub.category_scores.map((cs, i) => {
+            {displayData.map((cs, i) => {
               const pct = cs.possible > 0 ? Math.round((cs.earned / cs.possible) * 100) : 0;
               const barColor = pct >= 80 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-500';
               return (
                 <div key={i} className="flex items-center gap-3 px-3 py-2 border-b border-gray-100 last:border-b-0">
                   <span className="text-xs text-gray-700 flex-1">{cs.category}</span>
-                  <span className="text-xs font-bold text-gray-900 w-16 text-right">{cs.earned}/{cs.possible}</span>
+                  {isEditing ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        max={cs.possible}
+                        value={cs.earned}
+                        onChange={(e) => {
+                          const updated = [...editCategoryScores];
+                          updated[i] = { ...updated[i], earned: Math.min(Number(e.target.value), cs.possible) };
+                          setEditCategoryScores(updated);
+                        }}
+                        className="w-12 text-xs text-center border border-gray-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-indigo-400"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <span className="text-xs text-gray-500">/ {cs.possible}</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs font-bold text-gray-900 w-16 text-right">{cs.earned}/{cs.possible}</span>
+                  )}
                   <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                     <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
                   </div>
@@ -344,6 +452,46 @@ export default function SubmissionsView() {
     setEditingSubId(null);
     setEditScore("");
     setEditFeedback("");
+  };
+
+  // ── Save Category Score Override ──
+  const saveCategoryOverride = async (sub: Submission) => {
+    setSavingCategories(true);
+    const updatePayload: Record<string, unknown> = { manually_edited: true };
+
+    if (sub.skill_assessments && sub.skill_assessments.length > 0) {
+      updatePayload.skill_assessments = editSkillAssessments;
+    }
+    if (sub.category_scores && sub.category_scores.length > 0) {
+      updatePayload.category_scores = editCategoryScores;
+    }
+
+    const { error } = await supabase
+      .from('submissions')
+      .update(updatePayload)
+      .eq('id', sub.id);
+
+    if (!error) {
+      // Optimistic UI update
+      setStudentGroups(prevGroups => prevGroups.map(group => ({
+        ...group,
+        submissions: group.submissions.map(s =>
+          s.id === sub.id
+            ? {
+              ...s,
+              ...(updatePayload.skill_assessments ? { skill_assessments: editSkillAssessments } : {}),
+              ...(updatePayload.category_scores ? { category_scores: editCategoryScores } : {}),
+              manually_edited: true,
+            }
+            : s
+        ),
+      })));
+      setEditingCategorySub(null);
+    } else {
+      console.error("Failed to save category override", error);
+      alert("Failed to save category edits.");
+    }
+    setSavingCategories(false);
   };
 
   const saveGradeOverride = async (sub: Submission, email: string) => {

@@ -264,10 +264,25 @@ export async function gradeSubmission(
       if (!ex.file_url) continue;
       try {
         const exFile = await fetchToBuffer(ex.file_url);
+
+        // Build category breakdown string if teacher corrected it
+        let categoryCalibration = '';
+        if (ex.category_scores && ex.category_scores.length > 0) {
+          const lines = ex.category_scores.map(
+            (cs: CategoryScore) => `  - ${cs.category}: ${cs.earned}/${cs.possible}`
+          );
+          categoryCalibration = `\nTEACHER'S PER-CATEGORY BREAKDOWN (apply these same scoring patterns):\n${lines.join('\n')}`;
+        } else if (ex.skill_assessments && ex.skill_assessments.length > 0) {
+          const lines = ex.skill_assessments.map(
+            (sa: SkillAssessment) => `  - [${sa.level}] ${sa.dimension}: ${sa.skill} → ${sa.status}`
+          );
+          categoryCalibration = `\nTEACHER'S PER-SKILL ASSESSMENT (apply these same judgments):\n${lines.join('\n')}`;
+        }
+
         aiMessages.push({
           role: 'user',
           content: [
-            { type: 'text', text: `TEACHER APPROVED STUDENT EXEMPLAR:\nThe following attached document is a past student submission that the teacher explicitly marked as a grading exemplar.\nThe teacher gave this submission a SCORE of: ${ex.score}\nThe teacher gave this submission FEEDBACK of: "${ex.feedback}"\nAnalyze this exemplar to understand EXACTLY how the teacher grades this assignment, and mimic this style, stringency, and feedback tone for the current student.` },
+            { type: 'text', text: `TEACHER APPROVED STUDENT EXEMPLAR:\nThe following attached document is a past student submission that the teacher explicitly marked as a grading exemplar.\nThe teacher gave this submission a SCORE of: ${ex.score}\nThe teacher gave this submission FEEDBACK of: "${ex.feedback}"\n${categoryCalibration}\nCALIBRATION INSTRUCTIONS:\n1. Note which rubric categories the teacher was strict vs lenient on.\n2. Note the point deductions: what errors cost how many points?\n3. Note the feedback style: how direct? How encouraging? How specific?\n4. Apply these SAME deduction patterns, strictness levels, and tone when grading the current student's work.` },
             { type: 'file' as const, data: exFile.buffer.toString('base64'), mediaType: exFile.mimeType },
           ]
         });
