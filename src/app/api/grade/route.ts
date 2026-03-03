@@ -8,7 +8,7 @@ const resend = new Resend(process.env.RESEND_API_KEY!);
 
 export async function POST(req: Request) {
   try {
-    const { submissionId } = await req.json();
+    const { submissionId, sendEmail: clientSendEmail } = await req.json();
 
     if (!submissionId) {
       return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
@@ -34,7 +34,8 @@ export async function POST(req: Request) {
     // 2. Call shared grading logic
     const result = await gradeSubmission(activeFileUrls, assignment);
 
-    const shouldSendEmail = auto_send_emails !== false;
+    // Default to true if clientSendEmail is not provided
+    const shouldSendEmail = assignment.auto_send_emails !== false && (clientSendEmail !== false);
 
     // 3. Update the Submission in Supabase
     const { error: updateError } = await supabase
@@ -103,7 +104,15 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, score: result.Score });
+    return NextResponse.json({
+      success: true,
+      score: result.Score,
+      feedback: result.Feedback,
+      categoryScores: result.CategoryScores,
+      skillAssessments: result.SkillAssessments,
+      transcription: result.Transcription,
+      reasoning: result.Reasoning
+    });
 
   } catch (error: unknown) {
     const err = error as Error;

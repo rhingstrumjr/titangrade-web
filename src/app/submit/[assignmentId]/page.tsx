@@ -18,11 +18,15 @@ export default function SubmitPage() {
   const [email, setEmail] = useState("");
   const [files, setFiles] = useState<File[]>([]);
 
-  const [submitStatus, setSubmitStatus] = useState<"idle" | "uploading" | "grading" | "success" | "error">("idle");
+  const [submitStatus, setSubmitStatus] = useState<"idle" | "uploading" | "grading" | "success" | "feedback" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [submissionsUsed, setSubmissionsUsed] = useState<number | null>(null);
   const [checkingLimit, setCheckingLimit] = useState(false);
   const [rosterError, setRosterError] = useState("");
+  const [sendEmail, setSendEmail] = useState(true);
+  const [feedbackData, setFeedbackData] = useState<any>(null);
+  const [priorSubmissions, setPriorSubmissions] = useState<any[]>([]);
+  const [expandedSubmission, setExpandedSubmission] = useState<string | null>(null);
 
   const gradingLoadingTexts = [
     "Analyzing handwriting...",
@@ -101,15 +105,17 @@ export default function SubmitPage() {
       setName(emailToCheck.split('@')[0]);
     }
 
-    // 2. Check Submission Limit
-    const { count, error } = await supabase
+    // 2. Check Submission Limit and Fetch Past Submissions
+    const { count, error, data: pastSubmissions } = await supabase
       .from('submissions')
-      .select('*', { count: 'exact', head: true })
+      .select('*', { count: 'exact' })
       .eq('assignment_id', assignmentId)
-      .eq('student_email', emailToCheck);
+      .eq('student_email', emailToCheck)
+      .order('created_at', { ascending: false });
 
-    if (!error && count !== null) {
-      setSubmissionsUsed(count);
+    if (!error) {
+      if (count !== null) setSubmissionsUsed(count);
+      if (pastSubmissions) setPriorSubmissions(pastSubmissions);
     }
     setCheckingLimit(false);
   };
@@ -179,7 +185,7 @@ export default function SubmitPage() {
       const res = await fetch('/api/grade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId })
+        body: JSON.stringify({ submissionId, sendEmail })
       });
 
       if (!res.ok) {
@@ -187,7 +193,9 @@ export default function SubmitPage() {
         throw new Error(err.error || "Grading API failed");
       }
 
-      setSubmitStatus("success");
+      const gradedResult = await res.json();
+      setFeedbackData(gradedResult);
+      setSubmitStatus("feedback");
 
     } catch (error: unknown) {
       const err = error as Error;
@@ -212,15 +220,46 @@ export default function SubmitPage() {
           </p>
         </div>
 
-        {submitStatus === "success" ? (
-          <div className="text-center py-8 animate-in zoom-in duration-300">
-            <CheckCircle2 className="mx-auto h-16 w-16 text-green-500 mb-4" />
-            <h3 className="text-2xl font-bold text-gray-900">Submitted Successfully!</h3>
-            <p className="mt-2 text-gray-600">
-              Your assignment has been submitted to your teacher and is currently being graded by the AI.
-              <br /><br />
-              <b>You will receive an email shortly</b> with your score and feedback!
-            </p>
+        {submitStatus === "feedback" && feedbackData ? (
+          <div className="text-left animate-in zoom-in duration-300 space-y-4">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <CheckCircle2 className="h-10 w-10 text-green-500" />
+              <h3 className="text-2xl font-bold text-gray-900">Grading Complete!</h3>
+            </div>
+
+            <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-6">
+              <div className="flex justify-between items-baseline mb-4 border-b border-indigo-200 pb-4">
+                <h4 className="text-lg font-semibold text-indigo-900">Your Score</h4>
+                <span className="text-3xl font-bold text-indigo-600">{feedbackData.score}</span>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <h5 className="font-semibold text-gray-900 mb-1">Feedback</h5>
+                  <p className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">{feedbackData.feedback}</p>
+                </div>
+              </div>
+            </div>
+
+            {sendEmail && (
+              <p className="text-sm text-gray-500 text-center mt-4">
+                A copy of this feedback has been sent to your email.
+              </p>
+            )}
+
+            <div className="pt-4 flex justify-center">
+              <button
+                onClick={() => {
+                  setSubmitStatus("idle");
+                  setFiles([]);
+                  setFeedbackData(null);
+                  validateStudentAndLimit(email); // Refresh past submissions
+                }}
+                className="text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
+              >
+                Submit another attempt
+              </button>
+            </div>
           </div>
         ) : submitStatus === "uploading" || submitStatus === "grading" ? (
           <div className="text-center py-12 animate-in fade-in duration-300">
@@ -310,7 +349,21 @@ export default function SubmitPage() {
               </div>
             )}
 
-            <div>
+            <div className="space-y-4">
+              <div className="flex items-center">
+                <input
+                  id="sendEmail"
+                  name="sendEmail"
+                  type="checkbox"
+                  checked={sendEmail}
+                  onChange={(e) => setSendEmail(e.target.checked)}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+                <label htmlFor="sendEmail" className="ml-2 block text-sm text-gray-900">
+                  Email me a copy of my feedback
+                </label>
+              </div>
+
               <button
                 type="submit"
                 disabled={files.length === 0 || !name || !!rosterError || (submissionsUsed !== null && submissionsUsed >= maxAttempts) || checkingLimit}
@@ -320,6 +373,53 @@ export default function SubmitPage() {
               </button>
             </div>
           </form>
+        )}
+
+        {/* Prior Submissions Section */}
+        {priorSubmissions.length > 0 && submitStatus === "idle" && (
+          <div className="mt-8 border-t pt-8">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Past Submissions</h3>
+            <div className="space-y-4">
+              {priorSubmissions.map((sub, idx) => (
+                <div key={sub.id} className="border rounded-lg overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedSubmission(expandedSubmission === sub.id ? null : sub.id)}
+                    className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex flex-col text-left">
+                      <span className="font-semibold text-gray-900">Attempt {priorSubmissions.length - idx}</span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(sub.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`font-bold ${sub.score ? 'text-indigo-600' : 'text-gray-400'}`}>
+                        {sub.score || 'Pending'}
+                      </span>
+                      <svg
+                        className={`w-5 h-5 text-gray-500 transform transition-transform ${expandedSubmission === sub.id ? 'rotate-180' : ''}`}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </button>
+
+                  {expandedSubmission === sub.id && sub.feedback && (
+                    <div className="p-4 border-t bg-white">
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{sub.feedback}</p>
+                    </div>
+                  )}
+                  {expandedSubmission === sub.id && !sub.feedback && (
+                    <div className="p-4 border-t bg-white">
+                      <p className="text-sm text-gray-500 italic">No feedback available yet.</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
