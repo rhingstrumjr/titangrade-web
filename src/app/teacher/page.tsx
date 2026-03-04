@@ -704,6 +704,10 @@ export default function TeacherDashboard() {
                   {!generatedKey ? (
                     <div className="space-y-4 text-center">
                       <p className="text-sm text-gray-600">Upload a blank worksheet to automatically generate a structured JSON answer key using Gemini.</p>
+                      <p className="text-xs text-indigo-600 font-medium bg-indigo-50 p-2 rounded-md inline-block">
+                        <strong>Required Formats: PDF, PNG, or JPG.</strong> <br />
+                        For Google Docs or Microsoft Word, please select <em>File &rarr; Download &rarr; PDF</em> first.
+                      </p>
 
                       <div className="flex text-sm text-gray-600 justify-center">
                         <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 px-4 py-2 border border-blue-200 shadow-sm transition-colors hover:bg-blue-50">
