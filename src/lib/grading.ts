@@ -24,6 +24,7 @@ export interface GradeResult {
   Reasoning: string[];
   CategoryScores?: CategoryScore[];
   SkillAssessments?: SkillAssessment[];
+  estCost?: number;
 }
 
 export interface AssignmentData {
@@ -338,7 +339,7 @@ export async function gradeSubmission(
     };
 
   // Call Gemini
-  const { object } = await generateObject({
+  const { object, usage } = await generateObject({
     model: google('gemini-2.5-flash'),
     system: systemPrompt,
     messages: aiMessages,
@@ -348,6 +349,16 @@ export async function gradeSubmission(
       ...categorySchemaFields,
     }),
   });
+
+  // Calculate estimated cost if usage is present
+  let estCost = 0;
+  if (usage) {
+    const usageAny = usage as any;
+    const inputTokens = usageAny.promptTokens || 0;
+    const outputTokens = usageAny.completionTokens || 0;
+    // Rough cost for gemini-2.5-flash: $0.075/1M input, $0.30/1M output
+    estCost = (inputTokens / 1000000) * 0.075 + (outputTokens / 1000000) * 0.3;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = object as any;
@@ -359,5 +370,6 @@ export async function gradeSubmission(
     Reasoning: result.Reasoning,
     CategoryScores: result.CategoryScores ?? undefined,
     SkillAssessments: result.SkillAssessments ?? undefined,
+    estCost,
   };
 }

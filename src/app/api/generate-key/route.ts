@@ -52,13 +52,14 @@ export async function POST(req: NextRequest) {
     });
 
     // Log Token Usage if available
+    let estCost = 0;
     if (result.usage) {
       const usage = result.usage as any;
       const inputTokens = usage.promptTokens || 0;
       const outputTokens = usage.completionTokens || 0;
       const totalTokens = inputTokens + outputTokens;
       // Rough cost: $0.075/1M input, $0.30/1M output for flash
-      const estCost = (inputTokens / 1000000) * 0.075 + (outputTokens / 1000000) * 0.3;
+      estCost = (inputTokens / 1000000) * 0.075 + (outputTokens / 1000000) * 0.3;
 
       try {
         await fetch('http://localhost:5001/api/log_usage', {
@@ -79,7 +80,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      answerKey: result.object
+      answerKey: result.object,
+      estCost
     });
   } catch (error: unknown) {
     const err = error as Error;

@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     }
 
     // 3. Regrade each submission
-    const results: { id: string; oldScore: string; newScore: string; success: boolean; error?: string }[] = [];
+    const results: { id: string; oldScore: string; newScore: string; success: boolean; error?: string; estCost?: number }[] = [];
 
     for (const sub of submissions) {
       try {
@@ -67,6 +67,10 @@ export async function POST(req: Request) {
         const oldScore = sub.score || '';
         const oldFeedback = sub.feedback || '';
 
+        // Calculate the new cumulative cost 
+        const oldCost = Number(sub.ai_cost) || 0;
+        const newCumulativeCost = oldCost + (result.estCost || 0);
+
         // Update the submission with new grade + preserve old grade
         const { error: updateError } = await supabase
           .from('submissions')
@@ -77,6 +81,7 @@ export async function POST(req: Request) {
             feedback: result.Feedback,
             category_scores: result.CategoryScores || null,
             skill_assessments: result.SkillAssessments || null,
+            ai_cost: newCumulativeCost,
           })
           .eq('id', sub.id);
 
@@ -126,7 +131,7 @@ export async function POST(req: Request) {
           }
         }
 
-        results.push({ id: sub.id, oldScore, newScore: result.Score, success: true });
+        results.push({ id: sub.id, oldScore, newScore: result.Score, success: true, estCost: result.estCost });
 
       } catch (gradeErr: unknown) {
         const err = gradeErr as Error;

@@ -33,6 +33,7 @@ interface Assignment {
   auto_send_emails: boolean;
   class_id?: string | null;
   generated_key?: any;
+  ai_cost?: number;
   created_at: string;
 }
 
@@ -59,6 +60,7 @@ export default function TeacherDashboard() {
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
   const [generatedKey, setGeneratedKey] = useState<any>(null);
   const [isGeneratingKey, setIsGeneratingKey] = useState(false);
+  const [generatedKeyCost, setGeneratedKeyCost] = useState<number>(0);
 
   const [isCreatingClass, setIsCreatingClass] = useState(false);
   const [newClassName, setNewClassName] = useState("");
@@ -217,6 +219,7 @@ export default function TeacherDashboard() {
           is_socratic: isSocratic,
           auto_send_emails: autoSendEmails,
           generated_key: generatedKey,
+          ai_cost: generatedKeyCost,
         } as Assignment : a));
         resetFormState();
       }
@@ -237,7 +240,8 @@ export default function TeacherDashboard() {
         is_socratic: isSocratic,
         auto_send_emails: autoSendEmails,
         class_id: classId,
-        generated_key: generatedKey
+        generated_key: generatedKey,
+        ai_cost: generatedKeyCost
       }))
       : [{
         title: newTitle,
@@ -251,7 +255,8 @@ export default function TeacherDashboard() {
         is_socratic: isSocratic,
         auto_send_emails: autoSendEmails,
         class_id: selectedClassId,
-        generated_key: generatedKey
+        generated_key: generatedKey,
+        ai_cost: generatedKeyCost
       }];
 
     const { data, error } = await supabase
@@ -283,6 +288,7 @@ export default function TeacherDashboard() {
     setNewExemplarFiles([]);
     setSelectedClassesForNewAssignment([]);
     setGeneratedKey(null);
+    setGeneratedKeyCost(0);
   };
 
   const handleEditAssignment = (assignment: Assignment) => {
@@ -294,6 +300,7 @@ export default function TeacherDashboard() {
     setIsSocratic(assignment.is_socratic || false);
     setAutoSendEmails(assignment.auto_send_emails !== false); // default to true if undefined
     setGeneratedKey(assignment.generated_key || null);
+    setGeneratedKeyCost(assignment.ai_cost || 0);
 
     if (assignment.rubric && assignment.rubric.startsWith('http')) {
       setRubricType("file");
@@ -727,6 +734,7 @@ export default function TeacherDashboard() {
                                   const data = await res.json();
                                   if (data.success && data.answerKey) {
                                     setGeneratedKey(data.answerKey);
+                                    if (data.estCost) setGeneratedKeyCost(data.estCost);
                                   } else {
                                     alert(data.error || "Failed to generate answer key.");
                                   }

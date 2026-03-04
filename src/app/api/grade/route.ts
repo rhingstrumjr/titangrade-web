@@ -43,10 +43,10 @@ export async function POST(req: Request) {
       .update({
         score: result.Score,
         feedback: result.Feedback,
-        status: 'graded',
         email_sent: shouldSendEmail,
         category_scores: result.CategoryScores || null,
         skill_assessments: result.SkillAssessments || null,
+        ai_cost: result.estCost || 0,
       })
       .eq('id', submissionId);
 
@@ -109,10 +109,10 @@ export async function POST(req: Request) {
       success: true,
       score: result.Score,
       feedback: result.Feedback,
-      categoryScores: result.CategoryScores,
       skillAssessments: result.SkillAssessments,
       transcription: result.Transcription,
-      reasoning: result.Reasoning
+      reasoning: result.Reasoning,
+      estCost: result.estCost
     });
 
   } catch (error: unknown) {
