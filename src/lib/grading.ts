@@ -37,6 +37,7 @@ export interface AssignmentData {
   exemplar_urls?: string[];
   is_socratic: boolean;
   auto_send_emails: boolean;
+  generated_key?: any;
 }
 
 // Helper to fetch file and make it a buffer
@@ -57,7 +58,7 @@ export async function gradeSubmission(
   fileUrls: string[],
   assignment: AssignmentData,
 ): Promise<GradeResult> {
-  const { rubric, rubrics, max_score, title, grading_framework, exemplar_url, exemplar_urls, is_socratic } = assignment;
+  const { rubric, rubrics, max_score, title, grading_framework, exemplar_url, exemplar_urls, is_socratic, generated_key } = assignment;
 
   const activeRubrics = rubrics && rubrics.length > 0 ? rubrics : [rubric];
   const activeExemplars = exemplar_urls && exemplar_urls.length > 0
@@ -179,8 +180,26 @@ export async function gradeSubmission(
       ? `\n  RUBRIC: See the attached rubric document(s). Grade strictly according to the criteria shown. Max Score: ${max_score}.`
       : `\n  RUBRIC (Max Score: ${max_score}): Grade based on quality, completeness, and accuracy.`);
 
-  // Build system prompt
-  const systemPrompt = `You are a meticulous Science Teacher grading a student's assignment titled "${title}".
+  let answerKeyInstructions = '';
+  if (generated_key) {
+    answerKeyInstructions = `
+    🚨 AUTOMATED ANSWER KEY DETECTED 🚨
+    The teacher explicitly verified the following structured JSON as the correct answers. You MUST use this as the absolute source of truth for scoring:
+    ${JSON.stringify(generated_key, null, 2)}
+    `;
+  }
+
+  const systemPrompt = `
+  You are an expert, meticulous science teacher grading an assignment titled: "${title}".
+  The maximum possible score is: ${max_score}.
+
+  YOUR PRIMARY DIRECTIVE:
+  Grade the student's submission accurately based ONLY on the provided rubric and/or exemplars. 
+  Extract text carefully, evaluate reasoning step-by-step, and output structured JSON.
+
+  ${frameworkInstructions}
+  ${categoryInstructions}
+  ${rubricTextBlock}
   
   SCORING BEHAVIOR: Grade strictly by the rubric with NO generosity bias. If work is missing, the score for that section is 0 — do not give partial credit for "effort" or "attempting." Only the rubric criteria determine the score.
   
@@ -203,10 +222,7 @@ export async function gradeSubmission(
   - If comparing to an Exemplar, do a direct matching: Student Answer vs Exemplar Answer.
   - Quote the exact text the student wrote when evaluating their reasoning.
   ${socraticInstructions}
-  
-  ${frameworkInstructions}
-  ${categoryInstructions}
-  ${rubricTextBlock}`;
+  ${answerKeyInstructions}`;
 
   // Build AI message context
   const studentFileParts = studentFiles.map(sf => ({

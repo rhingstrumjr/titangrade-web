@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon, Pencil, XCircle } from "lucide-react";
 import Link from "next/link";
+import { AnswerKeyEditor } from "./AnswerKeyEditor";
 
 interface Class {
   id: string;
@@ -31,6 +32,7 @@ interface Assignment {
   is_socratic: boolean;
   auto_send_emails: boolean;
   class_id?: string | null;
+  generated_key?: any;
   created_at: string;
 }
 
@@ -55,6 +57,8 @@ export default function TeacherDashboard() {
   const [createLoading, setCreateLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+  const [generatedKey, setGeneratedKey] = useState<any>(null);
+  const [isGeneratingKey, setIsGeneratingKey] = useState(false);
 
   const [isCreatingClass, setIsCreatingClass] = useState(false);
   const [newClassName, setNewClassName] = useState("");
@@ -192,6 +196,7 @@ export default function TeacherDashboard() {
           max_attempts: maxAttempts,
           is_socratic: isSocratic,
           auto_send_emails: autoSendEmails,
+          generated_key: generatedKey,
         })
         .eq('id', editingAssignment.id);
 
@@ -211,6 +216,7 @@ export default function TeacherDashboard() {
           max_attempts: maxAttempts,
           is_socratic: isSocratic,
           auto_send_emails: autoSendEmails,
+          generated_key: generatedKey,
         } as Assignment : a));
         resetFormState();
       }
@@ -230,7 +236,8 @@ export default function TeacherDashboard() {
         max_attempts: maxAttempts,
         is_socratic: isSocratic,
         auto_send_emails: autoSendEmails,
-        class_id: classId
+        class_id: classId,
+        generated_key: generatedKey
       }))
       : [{
         title: newTitle,
@@ -243,7 +250,8 @@ export default function TeacherDashboard() {
         max_attempts: maxAttempts,
         is_socratic: isSocratic,
         auto_send_emails: autoSendEmails,
-        class_id: selectedClassId // default to current tab if no explicit checkboxes checked
+        class_id: selectedClassId,
+        generated_key: generatedKey
       }];
 
     const { data, error } = await supabase
@@ -274,6 +282,7 @@ export default function TeacherDashboard() {
     setNewRubricFiles([]);
     setNewExemplarFiles([]);
     setSelectedClassesForNewAssignment([]);
+    setGeneratedKey(null);
   };
 
   const handleEditAssignment = (assignment: Assignment) => {
@@ -284,6 +293,7 @@ export default function TeacherDashboard() {
     setMaxAttempts(assignment.max_attempts || 1);
     setIsSocratic(assignment.is_socratic || false);
     setAutoSendEmails(assignment.auto_send_emails !== false); // default to true if undefined
+    setGeneratedKey(assignment.generated_key || null);
 
     if (assignment.rubric && assignment.rubric.startsWith('http')) {
       setRubricType("file");
@@ -685,6 +695,58 @@ export default function TeacherDashboard() {
                       )
                     )}
                   </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1 text-gray-700">Optional: Auto-Generate Answer Key (AI)</label>
+                <div className="mt-1 flex flex-col px-6 pt-5 pb-6 border border-gray-300 rounded-md bg-white">
+                  {!generatedKey ? (
+                    <div className="space-y-4 text-center">
+                      <p className="text-sm text-gray-600">Upload a blank worksheet to automatically generate a structured JSON answer key using Gemini.</p>
+
+                      <div className="flex text-sm text-gray-600 justify-center">
+                        <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 px-4 py-2 border border-blue-200 shadow-sm transition-colors hover:bg-blue-50">
+                          {isGeneratingKey ? "Analyzing Document..." : "Select Blank Worksheet & Generate"}
+                          <input
+                            type="file"
+                            className="sr-only"
+                            accept=".pdf, .png, .jpg, .jpeg"
+                            disabled={isGeneratingKey}
+                            onChange={async (e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                setIsGeneratingKey(true);
+                                const formData = new FormData();
+                                formData.append("file", e.target.files[0]);
+                                try {
+                                  const res = await fetch("/api/generate-key", { method: "POST", body: formData });
+                                  const data = await res.json();
+                                  if (data.success && data.answerKey) {
+                                    setGeneratedKey(data.answerKey);
+                                  } else {
+                                    alert(data.error || "Failed to generate answer key.");
+                                  }
+                                } catch (err) {
+                                  console.error(err);
+                                  alert("Error generating key.");
+                                } finally {
+                                  setIsGeneratingKey(false);
+                                }
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-emerald-600">Answer Key Generated!</span>
+                        <button type="button" onClick={() => setGeneratedKey(null)} className="text-xs text-red-500 hover:underline">Clear Key</button>
+                      </div>
+                      <AnswerKeyEditor answerKey={generatedKey} onChange={setGeneratedKey} />
+                    </div>
+                  )}
                 </div>
               </div>
 
