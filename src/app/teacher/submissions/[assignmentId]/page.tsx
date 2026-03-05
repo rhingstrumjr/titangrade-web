@@ -591,7 +591,13 @@ export default function SubmissionsView() {
         throw new Error(data.error || data.message || "Failed to sync grades");
       }
 
-      alert(data.message || "Successfully synced grades to Google Classroom.");
+      if (res.status === 207) {
+        console.error("Partial success/errors from Google Classroom:", data.results);
+        const firstError = data.results.find((r: any) => r.status === 'error');
+        alert(`${data.message}. First error details: ${firstError?.error}`);
+      } else {
+        alert(data.message || "Successfully synced grades to Google Classroom.");
+      }
     } catch (err: any) {
       console.error(err);
       alert(`Sync Error: ${err.message}`);
