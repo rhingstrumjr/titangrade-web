@@ -10,6 +10,7 @@ TitanGrade is a Next.js web application designed to help teachers grade student 
 - **Dashboard & CSV Export**: Track grading progress and export final student grades to a CSV file.
 
 ## Recent Updates
+- **Assignment Duplication**: Teachers can now quickly clone existing assignments (including their complex structured rubrics, framework, and settings) with a single click on the dashboard via the new "Copy" icon.
 - **Consolidated UI**: The "Edit Grade" and "Edit Skills/Category Assessment" buttons have been merged into a single edit flow.
 - **Submissions View Refactor**: The complex Submission view has been broken down into smaller, maintainable React components (`CategoryBreakdown`, `RegradeModal`, `ScoreDiff`).
 - **Dynamic Skill Editing**: Instructors can edit specific skill dimensions (`Demonstrated`, `Partial`, `Not Demonstrated`, `Not Assessed`) inside the main editing pane.
