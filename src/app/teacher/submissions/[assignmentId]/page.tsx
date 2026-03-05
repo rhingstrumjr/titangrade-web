@@ -490,10 +490,29 @@ export default function SubmissionsView() {
           body: JSON.stringify({ submissionId: sub.id, sendEmail: false })
         });
 
+        let newStatus = 'graded';
+        let newScore = '';
+
         if (!gradeRes.ok) {
           const errData = await gradeRes.json();
           await supabase.from('submissions').update({ status: 'error', feedback: errData.error }).eq('id', sub.id);
+          newStatus = 'error';
+        } else {
+          // grab updated data to extract score
+          const { data: updatedSub } = await supabase.from('submissions').select('score').eq('id', sub.id).single();
+          if (updatedSub) newScore = updatedSub.score;
         }
+
+        // Live update the UI
+        setStudentGroups(prevGroups => prevGroups.map(group => {
+          if (group.email === sub.student_email) {
+            const updatedSubmissions = group.submissions.map(s =>
+              s.id === sub.id ? { ...s, file_url: finalUrl, file_urls: [finalUrl], status: newStatus as any, score: newScore } : s
+            );
+            return { ...group, submissions: updatedSubmissions, latestStatus: newStatus as any, latestScore: newScore || group.latestScore };
+          }
+          return group;
+        }));
 
       } catch (err: any) {
         console.error("Error grading submission:", sub.id, err);
@@ -504,8 +523,6 @@ export default function SubmissionsView() {
     }
 
     setIsGradingGc(false);
-    // Reload page to show grades
-    window.location.reload();
   };
 
   // Check auto-start on mount (could be passed via query string)
