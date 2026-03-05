@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon, Pencil, XCircle } from "lucide-react";
 import Link from "next/link";
 import { AnswerKeyEditor } from "./AnswerKeyEditor";
+import { RubricBuilder } from "@/components/RubricBuilder";
+import type { RubricCriterion } from "@/types/submission";
 
 interface Class {
   id: string;
@@ -33,6 +35,7 @@ interface Assignment {
   auto_send_emails: boolean;
   class_id?: string | null;
   generated_key?: any;
+  structured_rubric?: RubricCriterion[];
   ai_cost?: number;
   created_at: string;
 }
@@ -50,10 +53,11 @@ export default function TeacherDashboard() {
   const [maxAttempts, setMaxAttempts] = useState(1);
   const [isSocratic, setIsSocratic] = useState(false);
   const [autoSendEmails, setAutoSendEmails] = useState(true);
-  const [rubricType, setRubricType] = useState<"text" | "file">("text");
+  const [rubricType, setRubricType] = useState<"text" | "file" | "structured">("text");
   const [newRubricText, setNewRubricText] = useState("");
   const [newRubricFiles, setNewRubricFiles] = useState<File[]>([]);
   const [newExemplarFiles, setNewExemplarFiles] = useState<File[]>([]);
+  const [structuredCriteria, setStructuredCriteria] = useState<RubricCriterion[]>([]);
   const [selectedClassesForNewAssignment, setSelectedClassesForNewAssignment] = useState<string[]>([]);
   const [createLoading, setCreateLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -111,8 +115,17 @@ export default function TeacherDashboard() {
 
     let finalRubricValue = newRubricText;
     let finalRubricsArray = newRubricText ? [newRubricText] : [];
+    let finalStructuredRubric: RubricCriterion[] | null = null;
 
-    if (rubricType === "file") {
+    if (rubricType === "structured") {
+      // Auto-generate plain text from structured criteria for backward compat
+      finalStructuredRubric = structuredCriteria.filter(c => c.name.trim());
+      const plainText = finalStructuredRubric.map(c =>
+        `${c.name} (${c.maxPoints} pts): ${c.description}`
+      ).join("\n");
+      finalRubricValue = plainText;
+      finalRubricsArray = [plainText];
+    } else if (rubricType === "file") {
       if (newRubricFiles.length > 0) {
         const uploadPromises = newRubricFiles.map(async (file) => {
           const fileExt = file.name.split('.').pop();
@@ -182,7 +195,7 @@ export default function TeacherDashboard() {
       finalExemplarArray = editingAssignment.exemplar_urls;
     }
 
-    const finalScore = gradingFramework === "marzano" ? 4 : newScore;
+    const finalScore = gradingFramework === "marzano" ? 4 : (rubricType === "structured" && finalStructuredRubric ? finalStructuredRubric.reduce((sum, c) => sum + c.maxPoints, 0) : newScore);
 
     if (editingAssignment) {
       const { error } = await supabase
@@ -192,6 +205,7 @@ export default function TeacherDashboard() {
           max_score: finalScore,
           rubric: finalRubricValue,
           rubrics: finalRubricsArray.length > 0 ? finalRubricsArray : null,
+          structured_rubric: finalStructuredRubric,
           exemplar_url: finalExemplarValue,
           exemplar_urls: finalExemplarArray,
           grading_framework: gradingFramework,
@@ -233,6 +247,7 @@ export default function TeacherDashboard() {
         max_score: finalScore,
         rubric: finalRubricValue,
         rubrics: finalRubricsArray.length > 0 ? finalRubricsArray : null,
+        structured_rubric: finalStructuredRubric,
         exemplar_url: finalExemplarValue,
         exemplar_urls: finalExemplarArray,
         grading_framework: gradingFramework,
@@ -248,6 +263,7 @@ export default function TeacherDashboard() {
         max_score: finalScore,
         rubric: finalRubricValue,
         rubrics: finalRubricsArray.length > 0 ? finalRubricsArray : null,
+        structured_rubric: finalStructuredRubric,
         exemplar_url: finalExemplarValue,
         exemplar_urls: finalExemplarArray,
         grading_framework: gradingFramework,
@@ -289,6 +305,7 @@ export default function TeacherDashboard() {
     setSelectedClassesForNewAssignment([]);
     setGeneratedKey(null);
     setGeneratedKeyCost(0);
+    setStructuredCriteria([]);
   };
 
   const handleEditAssignment = (assignment: Assignment) => {
@@ -302,7 +319,10 @@ export default function TeacherDashboard() {
     setGeneratedKey(assignment.generated_key || null);
     setGeneratedKeyCost(assignment.ai_cost || 0);
 
-    if (assignment.rubric && assignment.rubric.startsWith('http')) {
+    if (assignment.structured_rubric && assignment.structured_rubric.length > 0) {
+      setRubricType("structured");
+      setStructuredCriteria(assignment.structured_rubric);
+    } else if (assignment.rubric && assignment.rubric.startsWith('http')) {
       setRubricType("file");
     } else {
       setRubricType("text");
@@ -623,6 +643,13 @@ export default function TeacherDashboard() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => setRubricType("structured")}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${rubricType === "structured" ? "bg-white shadow-sm text-indigo-700" : "text-gray-500 hover:text-gray-700"}`}
+                    >
+                      Structured Builder
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setRubricType("file")}
                       className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${rubricType === "file" ? "bg-white shadow-sm text-indigo-700" : "text-gray-500 hover:text-gray-700"}`}
                     >
@@ -639,6 +666,12 @@ export default function TeacherDashboard() {
                     placeholder="Paste your rubric and evaluation criteria here. The more detailed, the better the AI will grade."
                     rows={8}
                     className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+                  />
+                ) : rubricType === "structured" ? (
+                  <RubricBuilder
+                    criteria={structuredCriteria}
+                    onChange={setStructuredCriteria}
+                    assignmentId={editingAssignment?.id}
                   />
                 ) : (
                   <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md bg-gray-50 hover:bg-gray-100 transition-colors">

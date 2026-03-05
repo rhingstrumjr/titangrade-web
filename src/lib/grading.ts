@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
+import type { RubricCriterion } from '@/types/submission';
 
 // Shared types
 export interface CategoryScore {
@@ -39,6 +40,7 @@ export interface AssignmentData {
   is_socratic: boolean;
   auto_send_emails: boolean;
   generated_key?: any;
+  structured_rubric?: RubricCriterion[];
 }
 
 // Helper to fetch file and make it a buffer
@@ -59,7 +61,7 @@ export async function gradeSubmission(
   fileUrls: string[],
   assignment: AssignmentData,
 ): Promise<GradeResult> {
-  const { rubric, rubrics, max_score, title, grading_framework, exemplar_url, exemplar_urls, is_socratic, generated_key } = assignment;
+  const { rubric, rubrics, max_score, title, grading_framework, exemplar_url, exemplar_urls, is_socratic, generated_key, structured_rubric } = assignment;
 
   const activeRubrics = rubrics && rubrics.length > 0 ? rubrics : [rubric];
   const activeExemplars = exemplar_urls && exemplar_urls.length > 0
@@ -174,12 +176,21 @@ export async function gradeSubmission(
   If the student got the question correct, celebrate it. If the student got the question wrong, you may explicitly reveal the correct answer and explain why it is correct.
   `;
 
-  // Build rubric text for system prompt (only text-based rubrics go here)
-  const rubricTextBlock = textRubrics.length > 0
-    ? `\n  RUBRIC (Max Score: ${max_score}):\n  ${textRubrics.join("\n\n---\n\n")}`
-    : (rubricFiles.length > 0
-      ? `\n  RUBRIC: See the attached rubric document(s). Grade strictly according to the criteria shown. Max Score: ${max_score}.`
-      : `\n  RUBRIC (Max Score: ${max_score}): Grade based on quality, completeness, and accuracy.`);
+  // Build rubric text for system prompt
+  let rubricTextBlock: string;
+  if (structured_rubric && structured_rubric.length > 0) {
+    // Use structured rubric for maximum precision
+    const criteriaText = structured_rubric.map((c, i) =>
+      `  ${i + 1}. ${c.name} (${c.maxPoints} pts): ${c.description}`
+    ).join('\n');
+    rubricTextBlock = `\n  RUBRIC (Max Score: ${max_score}):\n  The following structured criteria must each be scored individually:\n${criteriaText}\n\n  IMPORTANT: Your CategoryScores MUST use these exact criterion names.`;
+  } else if (textRubrics.length > 0) {
+    rubricTextBlock = `\n  RUBRIC (Max Score: ${max_score}):\n  ${textRubrics.join("\n\n---\n\n")}`;
+  } else if (rubricFiles.length > 0) {
+    rubricTextBlock = `\n  RUBRIC: See the attached rubric document(s). Grade strictly according to the criteria shown. Max Score: ${max_score}.`;
+  } else {
+    rubricTextBlock = `\n  RUBRIC (Max Score: ${max_score}): Grade based on quality, completeness, and accuracy.`;
+  }
 
   let answerKeyInstructions = '';
   if (generated_key) {

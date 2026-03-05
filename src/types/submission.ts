@@ -1,3 +1,9 @@
+export interface RubricCriterion {
+  name: string;
+  maxPoints: number;
+  description: string;
+}
+
 export interface CategoryScore {
   category: string;
   earned: number;

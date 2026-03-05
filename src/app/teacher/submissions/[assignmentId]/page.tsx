@@ -517,6 +517,13 @@ export default function SubmissionsView() {
               </button>
             )}
 
+            <Link
+              href={`/teacher/analytics/${assignmentId}`}
+              className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+            >
+              <BarChart3 size={16} /> Analytics
+            </Link>
+
             <button
               onClick={handleDownloadCSV}
               disabled={studentGroups.length === 0}
