@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, BarChart3, AlertTriangle, Lightbulb, Loader2, TrendingDown, Users } from "lucide-react";
+import { ArrowLeft, BarChart3, AlertTriangle, Lightbulb, Loader2, TrendingDown, TrendingUp, Users, CheckCircle2 } from "lucide-react";
 import type { CategoryScore, SkillAssessment, Submission } from "@/types/submission";
 
 interface Assignment {
@@ -30,6 +30,7 @@ export default function AnalyticsPage() {
   const [reteachPlan, setReteachPlan] = useState<string | null>(null);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [reteachCost, setReteachCost] = useState<number>(0);
+  const [selectedTroubleSpots, setSelectedTroubleSpots] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchData = async () => {
@@ -208,19 +209,19 @@ export default function AnalyticsPage() {
     skillAverages.sort((a, b) => a.pctDemonstrated - b.pctDemonstrated); // worst first
   }
 
-  // ── Trouble Spots ──
-  const troubleSpots: TroubleSpot[] = [];
+  // ── Build all criterion data, then split into trouble spots vs strengths ──
+  const MASTERY_THRESHOLD = 80; // school target: 80% of students
+  const allCriteria: TroubleSpot[] = [];
 
   if (!isMarzano && categoryAverages.length > 0) {
     for (const cat of categoryAverages) {
-      // Count how many students scored below 60% on this criterion
       let struggling = 0;
       for (const sub of latestSubs) {
         if (!sub.category_scores) continue;
         const cs = sub.category_scores.find((c: CategoryScore) => c.category === cat.name);
         if (cs && cs.possible > 0 && (cs.earned / cs.possible) < 0.6) struggling++;
       }
-      troubleSpots.push({
+      allCriteria.push({
         criterion: cat.name,
         avgScore: `${cat.avgEarned.toFixed(1)}/${cat.avgPossible.toFixed(1)}`,
         avgPct: cat.avgPct,
@@ -230,7 +231,7 @@ export default function AnalyticsPage() {
     }
   } else if (isMarzano && skillAverages.length > 0) {
     for (const sa of skillAverages) {
-      troubleSpots.push({
+      allCriteria.push({
         criterion: `[${sa.level}] ${sa.dimension}: ${sa.skill}`,
         avgScore: `${sa.pctDemonstrated.toFixed(0)}% demonstrated`,
         avgPct: sa.pctDemonstrated,
@@ -238,6 +239,16 @@ export default function AnalyticsPage() {
         totalStudents: sa.total,
       });
     }
+  }
+
+  // Split: below threshold = trouble, at or above = strengths
+  const troubleSpots = allCriteria.filter(c => c.avgPct < MASTERY_THRESHOLD);
+  const strengths = allCriteria.filter(c => c.avgPct >= MASTERY_THRESHOLD).sort((a, b) => b.avgPct - a.avgPct);
+
+  // Auto-select all trouble spots on first compute (only if selection is still empty and we have spots)
+  if (troubleSpots.length > 0 && selectedTroubleSpots.size === 0) {
+    // Use a microtask to avoid setting state during render
+    queueMicrotask(() => setSelectedTroubleSpots(new Set(troubleSpots.map(ts => ts.criterion))));
   }
 
   // ── Struggling Students ──
@@ -251,7 +262,8 @@ export default function AnalyticsPage() {
 
   // ── Reteach Plan Handler ──
   const handleGenerateReteach = async () => {
-    if (troubleSpots.length === 0) return;
+    const spotsToSend = troubleSpots.filter(ts => selectedTroubleSpots.has(ts.criterion));
+    if (spotsToSend.length === 0) return;
     setIsGeneratingPlan(true);
     try {
       const res = await fetch("/api/reteach-suggestions", {
@@ -261,7 +273,7 @@ export default function AnalyticsPage() {
           assignmentId: assignment.id,
           assignmentTitle: assignment.title,
           gradingFramework: assignment.grading_framework,
-          troubleSpots: troubleSpots.slice(0, 5), // top 5 worst
+          troubleSpots: spotsToSend,
         }),
       });
       const data = await res.json();
@@ -384,7 +396,34 @@ export default function AnalyticsPage() {
           </div>
         )}
 
-        {/* Trouble Spots */}
+        {/* ✅ What Students Know */}
+        {strengths.length > 0 && (
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+              <CheckCircle2 size={20} className="text-emerald-500" />
+              ✅ What Students Know
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">Skills/criteria where ≥ 80% of students met the target — keep building on these!</p>
+            <div className="space-y-2">
+              {strengths.map((s, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50/50 border border-emerald-100">
+                  <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-sm font-bold">
+                    <TrendingUp size={16} />
+                  </div>
+                  <div className="flex-grow">
+                    <p className="text-sm font-medium text-gray-900">{s.criterion}</p>
+                    <p className="text-xs text-gray-500">Avg: {s.avgScore}</p>
+                  </div>
+                  <div className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+                    {s.avgPct.toFixed(0)}%
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 🔥 Trouble Spots */}
         {troubleSpots.length > 0 && (
           <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -392,27 +431,67 @@ export default function AnalyticsPage() {
                 <AlertTriangle size={20} className="text-red-500" />
                 🔥 Trouble Spots
               </h2>
-              <button
-                onClick={handleGenerateReteach}
-                disabled={isGeneratingPlan}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
-              >
-                {isGeneratingPlan ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    Generating Plan...
-                  </>
-                ) : (
-                  <>
-                    <Lightbulb size={14} />
-                    Generate Reteach Plan
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-xs">
+                  <button
+                    onClick={() => setSelectedTroubleSpots(new Set(troubleSpots.map(ts => ts.criterion)))}
+                    className="text-indigo-600 hover:text-indigo-800 font-medium"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-gray-300">|</span>
+                  <button
+                    onClick={() => setSelectedTroubleSpots(new Set())}
+                    className="text-gray-500 hover:text-gray-700 font-medium"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <button
+                  onClick={handleGenerateReteach}
+                  disabled={isGeneratingPlan || selectedTroubleSpots.size === 0}
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                >
+                  {isGeneratingPlan ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Generating Plan...
+                    </>
+                  ) : (
+                    <>
+                      <Lightbulb size={14} />
+                      Reteach Plan ({selectedTroubleSpots.size})
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
             <div className="space-y-2">
-              {troubleSpots.slice(0, 8).map((ts, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
+              {troubleSpots.map((ts, i) => (
+                <div
+                  key={i}
+                  onClick={() => {
+                    setSelectedTroubleSpots(prev => {
+                      const next = new Set(prev);
+                      if (next.has(ts.criterion)) {
+                        next.delete(ts.criterion);
+                      } else {
+                        next.add(ts.criterion);
+                      }
+                      return next;
+                    });
+                  }}
+                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedTroubleSpots.has(ts.criterion)
+                      ? "bg-indigo-50/50 border-indigo-200"
+                      : "bg-gray-50 border-gray-100 opacity-60"
+                    }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedTroubleSpots.has(ts.criterion)}
+                    onChange={() => { }}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
+                  />
                   <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-red-100 text-red-700 text-sm font-bold">
                     {i + 1}
                   </div>
