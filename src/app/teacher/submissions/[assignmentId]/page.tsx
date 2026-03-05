@@ -493,21 +493,33 @@ export default function SubmissionsView() {
         let newStatus = 'graded';
         let newScore = '';
 
+        let gradedData: any = {};
+
         if (!gradeRes.ok) {
           const errData = await gradeRes.json();
           await supabase.from('submissions').update({ status: 'error', feedback: errData.error }).eq('id', sub.id);
           newStatus = 'error';
         } else {
-          // grab updated data to extract score
-          const { data: updatedSub } = await supabase.from('submissions').select('score').eq('id', sub.id).single();
-          if (updatedSub) newScore = updatedSub.score;
+          gradedData = await gradeRes.json();
+          newScore = gradedData.score;
         }
 
         // Live update the UI
         setStudentGroups(prevGroups => prevGroups.map(group => {
           if (group.email === sub.student_email) {
             const updatedSubmissions = group.submissions.map(s =>
-              s.id === sub.id ? { ...s, file_url: finalUrl, file_urls: [finalUrl], status: newStatus as any, score: newScore } : s
+              s.id === sub.id ? {
+                ...s,
+                file_url: finalUrl,
+                file_urls: [finalUrl],
+                status: newStatus as any,
+                score: newScore,
+                feedback: gradedData.feedback || s.feedback,
+                category_scores: gradedData.categoryScores || s.category_scores,
+                skill_assessments: gradedData.skillAssessments || s.skill_assessments,
+                transcription: gradedData.transcription || s.transcription,
+                reasoning: gradedData.reasoning || s.reasoning
+              } : s
             );
             return { ...group, submissions: updatedSubmissions, latestStatus: newStatus as any, latestScore: newScore || group.latestScore };
           }
