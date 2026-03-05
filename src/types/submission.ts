@@ -26,6 +26,7 @@ export interface Submission {
   pre_regrade_feedback: string | null;
   category_scores: CategoryScore[] | null;
   skill_assessments: SkillAssessment[] | null;
+  ai_cost?: number;
   created_at: string;
 }
 

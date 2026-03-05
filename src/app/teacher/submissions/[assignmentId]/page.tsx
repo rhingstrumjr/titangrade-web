@@ -30,6 +30,9 @@ export default function SubmissionsView() {
   const [regradeProgress, setRegradeProgress] = useState<string | null>(null);
   const [selectedForRegrade, setSelectedForRegrade] = useState<Set<string>>(new Set());
 
+  // AI cost tracking
+  const [assignmentCost, setAssignmentCost] = useState<number>(0);
+
   // Submission limit state
   const [maxAttempts, setMaxAttempts] = useState<number>(1);
   const [editingMaxAttempts, setEditingMaxAttempts] = useState(false);
@@ -44,10 +47,10 @@ export default function SubmissionsView() {
     async function fetchData() {
       if (!assignmentId) return;
 
-      // Fetch assignment title and max_attempts
+      // Fetch assignment title and max_attempts and ai_cost
       const { data: assignData } = await supabase
         .from('assignments')
-        .select('title, max_attempts')
+        .select('title, max_attempts, ai_cost')
         .eq('id', assignmentId)
         .single();
 
@@ -55,6 +58,7 @@ export default function SubmissionsView() {
         setAssignmentTitle(assignData.title);
         setMaxAttempts(assignData.max_attempts || 1);
         setTempMaxAttempts(assignData.max_attempts || 1);
+        setAssignmentCost(Number(assignData.ai_cost) || 0);
       }
 
       // Fetch submissions
@@ -123,6 +127,11 @@ export default function SubmissionsView() {
     (count, group) => count + group.submissions.filter(s =>
       s.status === 'graded' && !s.is_exemplar && !s.manually_edited
     ).length,
+    0
+  );
+
+  const totalAiCost = assignmentCost + studentGroups.reduce(
+    (total, group) => total + group.submissions.reduce((subTotal, s) => subTotal + (Number(s.ai_cost) || 0), 0),
     0
   );
 
@@ -460,6 +469,11 @@ export default function SubmissionsView() {
                   <Pencil size={10} />
                 </button>
               )}
+              {totalAiCost > 0 && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full" title="Total AI Cost for this assignment (including generation and grading)">
+                  💲 Est. AI Cost: ${totalAiCost.toFixed(3)}
+                </span>
+              )}
             </div>
           </div>
 
@@ -640,6 +654,9 @@ export default function SubmissionsView() {
                                             )}
                                           </div>
                                           <p className="text-xs text-gray-500">{new Date(sub.created_at).toLocaleString()}</p>
+                                          {Number(sub.ai_cost) > 0 && (
+                                            <p className="text-[10px] text-emerald-600 font-medium mt-0.5">Est. Cost: ${Number(sub.ai_cost).toFixed(4)}</p>
+                                          )}
                                         </div>
                                       </div>
 
