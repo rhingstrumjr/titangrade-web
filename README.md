@@ -13,6 +13,7 @@ TitanGrade is a Next.js web application designed to help teachers grade student 
 - **Google Classroom Integration**: Teachers can now import class rosters and assignments directly from Google Classroom.
 - **Google Drive Export Support**: Background conversion seamlessly exports student Google Docs, Sheets, and Slides submissions into PDFs for AI grading.
 - **Real-time Grading View**: The submissions dashboard now updates student scores dynamically in real-time as the AI API finishes grading each individual paper.
+- **AI Grading Transparency**: A new expandable details section surfaces exactly how the AI graded a submission, showing the extracted text (OCR) and step-by-step reasoning logic.
 - **Assignment Duplication**: Teachers can now quickly clone existing assignments (including their complex structured rubrics, framework, and settings) with a single click on the dashboard via the new "Copy" icon.
 - **Consolidated UI**: The "Edit Grade" and "Edit Skills/Category Assessment" buttons have been merged into a single edit flow.
 - **Submissions View Refactor**: The complex Submission view has been broken down into smaller, maintainable React components (`CategoryBreakdown`, `RegradeModal`, `ScoreDiff`).
