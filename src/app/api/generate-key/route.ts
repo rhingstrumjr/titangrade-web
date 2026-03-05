@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
     let estCost = 0;
     if (result.usage) {
       const usage = result.usage as any;
-      const inputTokens = usage.promptTokens || 0;
-      const outputTokens = usage.completionTokens || 0;
+      const inputTokens = usage.inputTokens || usage.promptTokens || 0;
+      const outputTokens = usage.outputTokens || usage.completionTokens || 0;
       const totalTokens = inputTokens + outputTokens;
       // Rough cost: $0.075/1M input, $0.30/1M output for flash
       estCost = (inputTokens / 1000000) * 0.075 + (outputTokens / 1000000) * 0.3;

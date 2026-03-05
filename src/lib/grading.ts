@@ -354,8 +354,8 @@ export async function gradeSubmission(
   let estCost = 0;
   if (usage) {
     const usageAny = usage as any;
-    const inputTokens = usageAny.promptTokens || 0;
-    const outputTokens = usageAny.completionTokens || 0;
+    const inputTokens = usageAny.inputTokens || usageAny.promptTokens || 0;
+    const outputTokens = usageAny.outputTokens || usageAny.completionTokens || 0;
     // Rough cost for gemini-2.5-flash: $0.075/1M input, $0.30/1M output
     estCost = (inputTokens / 1000000) * 0.075 + (outputTokens / 1000000) * 0.3;
   }
