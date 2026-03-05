@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon, Pencil, XCircle, Sparkles, Loader2 } from "lucide-react";
+import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon, Pencil, XCircle, Sparkles, Loader2, Copy } from "lucide-react";
 import Link from "next/link";
 import { AnswerKeyEditor } from "./AnswerKeyEditor";
 import { RubricBuilder } from "@/components/RubricBuilder";
@@ -64,6 +64,7 @@ export default function TeacherDashboard() {
   const [createLoading, setCreateLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+  const [isDuplicatingId, setIsDuplicatingId] = useState<string | null>(null);
   const [generatedKey, setGeneratedKey] = useState<any>(null);
   const [isGeneratingKey, setIsGeneratingKey] = useState(false);
   const [generatedKeyCost, setGeneratedKeyCost] = useState<number>(0);
@@ -377,6 +378,40 @@ export default function TeacherDashboard() {
       setAssignments(assignments.filter(a => a.id !== id));
     }
     setDeletingId(null);
+  };
+
+  const handleDuplicateAssignment = async (assignment: Assignment) => {
+    setIsDuplicatingId(assignment.id);
+
+    const newAssignment = {
+      title: `${assignment.title} (Copy)`,
+      max_score: assignment.max_score,
+      rubric: assignment.rubric,
+      rubrics: assignment.rubrics,
+      structured_rubric: assignment.structured_rubric,
+      exemplar_url: assignment.exemplar_url,
+      exemplar_urls: assignment.exemplar_urls,
+      grading_framework: assignment.grading_framework,
+      max_attempts: assignment.max_attempts,
+      is_socratic: assignment.is_socratic,
+      auto_send_emails: assignment.auto_send_emails,
+      class_id: assignment.class_id,
+      generated_key: assignment.generated_key,
+    };
+
+    const { data, error } = await supabase
+      .from('assignments')
+      .insert([newAssignment])
+      .select();
+
+    if (error) {
+      console.error("Error duplicating assignment:", error);
+      alert("Failed to duplicate assignment");
+    } else if (data && data.length > 0) {
+      setAssignments([data[0], ...assignments]);
+    }
+
+    setIsDuplicatingId(null);
   };
 
   const handleCreateClass = async (e: React.FormEvent) => {
@@ -979,6 +1014,21 @@ export default function TeacherDashboard() {
                           title="Edit Assignment"
                         >
                           <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleDuplicateAssignment(assignment);
+                          }}
+                          disabled={isDuplicatingId === assignment.id}
+                          className="text-gray-400 hover:text-emerald-600 transition-colors p-1.5 rounded-md hover:bg-emerald-50 focus:outline-none flex-shrink-0"
+                          title="Duplicate Assignment"
+                        >
+                          {isDuplicatingId === assignment.id ? (
+                            <Loader2 className="animate-spin h-4 w-4 text-emerald-600" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
                         </button>
                         <button
                           onClick={(e) => {
