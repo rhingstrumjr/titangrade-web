@@ -434,8 +434,8 @@ export default function SubmissionsView() {
     setRegradeProgress(null);
   };
 
-  // Google Classroom Batch Grader
-  const pendingGcSubmissions = studentGroups.flatMap(g => g.submissions).filter(s => s.status === 'pending' && s.file_url?.startsWith('drive:'));
+  // Google Classroom Batch Grader - include 'error' to allow retrying failed imports
+  const pendingGcSubmissions = studentGroups.flatMap(g => g.submissions).filter(s => (s.status === 'pending' || s.status === 'error') && s.file_url?.startsWith('drive:'));
 
   const handleGradeGcSubmissions = async () => {
     if (pendingGcSubmissions.length === 0) return;
@@ -658,7 +658,7 @@ export default function SubmissionsView() {
                 {isGradingGc ? (
                   <><Loader2 size={16} className="animate-spin" /> Grading {gcProgress.current}/{gcProgress.total} GC...</>
                 ) : (
-                  <><Download size={16} /> Import & Grade {pendingGcSubmissions.length} from GC</>
+                  <><Download size={16} /> Grade {pendingGcSubmissions.length} Ungraded GC Submissions</>
                 )}
               </button>
             )}

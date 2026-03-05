@@ -230,7 +230,7 @@ export default function TeacherDashboard() {
       }
 
       // 4. Redirect to Submissions page
-      window.location.href = `/teacher/submissions/${newAssignment.id}?gcImport=true`;
+      window.location.href = `/teacher/submissions/${newAssignment.id}`;
 
     } catch (err: any) {
       console.error(err);
