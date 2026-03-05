@@ -49,7 +49,15 @@ export async function GET(req: NextRequest) {
 
     const headers = new Headers();
     headers.set("Content-Type", outMimeType || "application/octet-stream");
-    headers.set("Content-Disposition", `attachment; filename="${meta.name || 'document'}"`);
+
+    // Ensure filename is safe for Content-Disposition header
+    const safeName = (meta.name || 'document').replace(/[^a-zA-Z0-9.\-_ ()]/g, "_");
+    // Ensure it has a pdf extension if we exported it
+    const finalName = outMimeType === "application/pdf" && !safeName.toLowerCase().endsWith('.pdf')
+      ? `${safeName}.pdf`
+      : safeName;
+
+    headers.set("Content-Disposition", `attachment; filename="${finalName}"`);
 
     return new NextResponse(arrayBuffer, { status: 200, headers });
   } catch (error: any) {

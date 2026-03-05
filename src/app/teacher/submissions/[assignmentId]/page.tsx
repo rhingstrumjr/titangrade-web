@@ -302,8 +302,8 @@ export default function SubmissionsView() {
               ...s,
               score: editScore,
               feedback: editFeedback,
-              ...(updatePayload.skill_assessments ? { skill_assessments: editSkillAssessments } : {}),
-              ...(updatePayload.category_scores ? { category_scores: editCategoryScores } : {}),
+              ...(sub.skill_assessments && sub.skill_assessments.length > 0 ? { skill_assessments: editSkillAssessments } : {}),
+              ...(sub.category_scores && sub.category_scores.length > 0 ? { category_scores: editCategoryScores } : {}),
               manually_edited: true
             } : s
           );
@@ -885,9 +885,15 @@ export default function SubmissionsView() {
                                         ) : null}
 
                                         <div className="flex flex-col gap-2 relative z-10">
-                                          <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 text-indigo-600 hover:text-indigo-800 transition-colors bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-md font-medium text-xs">
-                                            <FileText size={14} /> View Document
-                                          </a>
+                                          {sub.file_url?.startsWith('drive:') ? (
+                                            <button disabled className="flex items-center justify-center gap-1.5 text-gray-400 cursor-not-allowed bg-gray-50 border border-gray-100 px-3 py-1.5 rounded-md font-medium text-xs">
+                                              <FileText size={14} /> Pending Import
+                                            </button>
+                                          ) : (
+                                            <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 text-indigo-600 hover:text-indigo-800 transition-colors bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-md font-medium text-xs">
+                                              <FileText size={14} /> View Document
+                                            </a>
+                                          )}
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
