@@ -40,6 +40,7 @@ export interface Submission {
   category_scores: CategoryScore[] | null;
   skill_assessments: SkillAssessment[] | null;
   ai_cost?: number;
+  gc_submission_id?: string;
   created_at: string;
 }
 

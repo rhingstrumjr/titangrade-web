@@ -43,14 +43,21 @@ export default function SubmissionsView() {
   const [editCategoryScores, setEditCategoryScores] = useState<{ category: string; earned: number; possible: number }[]>([]);
   const [editSkillAssessments, setEditSkillAssessments] = useState<{ level: string; dimension: string; skill: string; status: string }[]>([]);
 
+  // Google Classroom integration state
+  const [isGradingGc, setIsGradingGc] = useState(false);
+  const [gcProgress, setGcProgress] = useState({ current: 0, total: 0 });
+  const [gcCourseId, setGcCourseId] = useState<string | null>(null);
+  const [gcCourseworkId, setGcCourseworkId] = useState<string | null>(null);
+  const [syncingToGc, setSyncingToGc] = useState(false);
+
   useEffect(() => {
     async function fetchData() {
       if (!assignmentId) return;
 
-      // Fetch assignment title and max_attempts and ai_cost
+      // Fetch assignment title and max_attempts, ai_cost, gc info
       const { data: assignData } = await supabase
         .from('assignments')
-        .select('title, max_attempts, ai_cost')
+        .select('title, max_attempts, ai_cost, gc_course_id, gc_coursework_id')
         .eq('id', assignmentId)
         .single();
 
@@ -59,6 +66,8 @@ export default function SubmissionsView() {
         setMaxAttempts(assignData.max_attempts || 1);
         setTempMaxAttempts(assignData.max_attempts || 1);
         setAssignmentCost(Number(assignData.ai_cost) || 0);
+        setGcCourseId(assignData.gc_course_id);
+        setGcCourseworkId(assignData.gc_coursework_id);
       }
 
       // Fetch submissions
@@ -425,6 +434,154 @@ export default function SubmissionsView() {
     setRegradeProgress(null);
   };
 
+  // Google Classroom Batch Grader
+  const pendingGcSubmissions = studentGroups.flatMap(g => g.submissions).filter(s => s.status === 'pending' && s.file_url?.startsWith('drive:'));
+
+  const handleGradeGcSubmissions = async () => {
+    if (pendingGcSubmissions.length === 0) return;
+    setIsGradingGc(true);
+    setGcProgress({ current: 0, total: pendingGcSubmissions.length });
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const providerToken = session?.provider_token;
+    if (!providerToken) {
+      alert("Google Classroom authentication expired. Please return to the Dashboard to reconnect.");
+      setIsGradingGc(false);
+      return;
+    }
+
+    for (let i = 0; i < pendingGcSubmissions.length; i++) {
+      const sub = pendingGcSubmissions[i];
+      const fileId = sub.file_url.replace('drive:', '');
+
+      try {
+        // 1. Download file via our API to bypass CORS
+        const dlRes = await fetch(`/api/classroom/download?fileId=${fileId}`, {
+          headers: { Authorization: `Bearer ${providerToken}` }
+        });
+
+        if (!dlRes.ok) throw new Error("Failed to download file from Google Drive");
+
+        const blob = await dlRes.blob();
+        // Get content disposition filename or default
+        const contentDisposition = dlRes.headers.get('Content-Disposition');
+        let filename = `submission_${sub.student_name.replace(/\s+/g, '_')}.pdf`;
+        if (contentDisposition && contentDisposition.includes('filename="')) {
+          filename = contentDisposition.split('filename="')[1].split('"')[0];
+        }
+
+        const file = new File([blob], filename, { type: blob.type });
+
+        // 2. Upload to Supabase Storage
+        const filePath = `${assignmentId}/${Date.now()}_${Math.random().toString(36).substring(7)}_${filename}`;
+        const { error: uploadError } = await supabase.storage.from('submissions').upload(filePath, file);
+        if (uploadError) throw new Error("Failed to upload to storage: " + uploadError.message);
+
+        const { data: publicUrlData } = supabase.storage.from('submissions').getPublicUrl(filePath);
+        const finalUrl = publicUrlData.publicUrl;
+
+        // 3. Update DB record
+        await supabase.from('submissions').update({ file_url: finalUrl, file_urls: [finalUrl] }).eq('id', sub.id);
+
+        // 4. Trigger grading API
+        const gradeRes = await fetch('/api/grade', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ submissionId: sub.id, sendEmail: false })
+        });
+
+        if (!gradeRes.ok) {
+          const errData = await gradeRes.json();
+          await supabase.from('submissions').update({ status: 'error', feedback: errData.error }).eq('id', sub.id);
+        }
+
+      } catch (err: any) {
+        console.error("Error grading submission:", sub.id, err);
+        await supabase.from('submissions').update({ status: 'error', feedback: err.message || "Failed to grade Google Classroom attachment." }).eq('id', sub.id);
+      }
+
+      setGcProgress({ current: i + 1, total: pendingGcSubmissions.length });
+    }
+
+    setIsGradingGc(false);
+    // Reload page to show grades
+    window.location.reload();
+  };
+
+  // Check auto-start on mount (could be passed via query string)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('gcImport') === 'true' && pendingGcSubmissions.length > 0 && !isGradingGc) {
+        // Remove param to avoid infinite loop on reload if user interrupts
+        window.history.replaceState({}, document.title, window.location.pathname);
+        // Auto start grading!
+        handleGradeGcSubmissions();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingGcSubmissions.length]);
+
+  const handleSyncToClassroom = async () => {
+    if (!gcCourseId || !gcCourseworkId) return;
+
+    setSyncingToGc(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const providerToken = session?.provider_token;
+
+    if (!providerToken) {
+      alert("Google Classroom authentication expired. Please reconnect on the Dashboard.");
+      setSyncingToGc(false);
+      return;
+    }
+
+    try {
+      // Gather grades to sync: latest graded submission per student that has a GC submission ID
+      const gradesToSync: { gcSubmissionId: string, assignedGrade: number }[] = [];
+      studentGroups.forEach(group => {
+        const latestInfo = group.submissions[group.submissions.length - 1];
+        if (latestInfo.status === 'graded' && latestInfo.gc_submission_id && latestInfo.score) {
+          // Parse score (e.g. "8/10") into a number
+          const scoreMatch = latestInfo.score.match(/^([\d.]+)/);
+          if (scoreMatch) {
+            const numericScore = parseFloat(scoreMatch[1]);
+            gradesToSync.push({ gcSubmissionId: latestInfo.gc_submission_id, assignedGrade: numericScore });
+          }
+        }
+      });
+
+      if (gradesToSync.length === 0) {
+        alert("No graded submissions with Google Classroom links found.");
+        setSyncingToGc(false);
+        return;
+      }
+
+      const res = await fetch('/api/classroom/return-grades', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${providerToken}`
+        },
+        body: JSON.stringify({
+          courseId: gcCourseId,
+          courseWorkId: gcCourseworkId,
+          grades: gradesToSync
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok && res.status !== 207) { // 207 means partial success
+        throw new Error(data.error || data.message || "Failed to sync grades");
+      }
+
+      alert(data.message || "Successfully synced grades to Google Classroom.");
+    } catch (err: any) {
+      console.error(err);
+      alert(`Sync Error: ${err.message}`);
+    }
+
+    setSyncingToGc(false);
+  };
 
 
   return (
@@ -491,6 +648,37 @@ export default function SubmissionsView() {
                 </div>
               )}
             </div>
+
+            {pendingGcSubmissions.length > 0 && (
+              <button
+                onClick={handleGradeGcSubmissions}
+                disabled={isGradingGc || syncingToGc}
+                className="flex items-center gap-2 bg-emerald-600 border border-transparent text-white hover:bg-emerald-700 disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+              >
+                {isGradingGc ? (
+                  <><Loader2 size={16} className="animate-spin" /> Grading {gcProgress.current}/{gcProgress.total} GC...</>
+                ) : (
+                  <><Download size={16} /> Import & Grade {pendingGcSubmissions.length} from GC</>
+                )}
+              </button>
+            )}
+
+            {gcCourseId && gcCourseworkId && studentGroups.length > 0 && (
+              <button
+                onClick={handleSyncToClassroom}
+                disabled={syncingToGc || isGradingGc}
+                className="flex items-center gap-2 bg-[#dbedf9] border border-[#a2d0ef] text-[#1E3A8A] hover:bg-[#b0d9f5] disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+              >
+                {syncingToGc ? (
+                  <><Loader2 size={16} className="animate-spin text-[#1E3A8A]" /> Syncing to GC...</>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 text-[#1E3A8A]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-3H8v3H6v-7.14l6-4.46 6 4.46V16.5h-2v-3h-3v3h-2z" /></svg>
+                    Sync to Google Classroom
+                  </>
+                )}
+              </button>
+            )}
 
             {/* Regrade Button */}
             <button
