@@ -991,6 +991,38 @@ export default function SubmissionsView() {
 
                                             {/* Category/Skill Breakdown */}
                                             <CategoryBreakdown sub={sub} />
+
+                                            {/* AI Grading Details (Transcription & Reasoning) */}
+                                            {((sub.transcription?.length ?? 0) > 0 || (sub.reasoning?.length ?? 0) > 0) && (
+                                              <details className="mt-4 border border-indigo-100 rounded-lg bg-indigo-50/50">
+                                                <summary className="cursor-pointer text-sm font-semibold text-indigo-700 hover:text-indigo-800 transition-colors p-3 bg-indigo-50/80 rounded-t-lg">
+                                                  View AI Grading Details (Transcription & Reasoning)
+                                                </summary>
+                                                <div className="p-4 space-y-4">
+                                                  {sub.transcription && sub.transcription.length > 0 && (
+                                                    <div>
+                                                      <h4 className="text-xs uppercase font-bold text-indigo-900 mb-2">1. AI Extracted Answers</h4>
+                                                      <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+                                                        {sub.transcription.map((step, idx) => (
+                                                          <li key={idx}>{step}</li>
+                                                        ))}
+                                                      </ul>
+                                                    </div>
+                                                  )}
+
+                                                  {sub.reasoning && sub.reasoning.length > 0 && (
+                                                    <div>
+                                                      <h4 className="text-xs uppercase font-bold text-indigo-900 mb-2">2. AI Scoring Reasoning</h4>
+                                                      <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+                                                        {sub.reasoning.map((step, idx) => (
+                                                          <li key={idx}>{step}</li>
+                                                        ))}
+                                                      </ul>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </details>
+                                            )}
                                           </>
                                         )}
                                       </div>

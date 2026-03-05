@@ -39,6 +39,8 @@ export interface Submission {
   pre_regrade_feedback: string | null;
   category_scores: CategoryScore[] | null;
   skill_assessments: SkillAssessment[] | null;
+  transcription?: string[];
+  reasoning?: string[];
   ai_cost?: number;
   gc_submission_id?: string;
   created_at: string;

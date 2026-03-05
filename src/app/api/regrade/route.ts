@@ -82,6 +82,8 @@ export async function POST(req: Request) {
             feedback: result.Feedback,
             category_scores: result.CategoryScores || null,
             skill_assessments: result.SkillAssessments || null,
+            transcription: result.Transcription || null,
+            reasoning: result.Reasoning || null,
             ai_cost: newCumulativeCost,
           })
           .eq('id', sub.id);

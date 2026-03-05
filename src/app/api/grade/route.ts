@@ -47,6 +47,8 @@ export async function POST(req: Request) {
         email_sent: shouldSendEmail,
         category_scores: result.CategoryScores || null,
         skill_assessments: result.SkillAssessments || null,
+        transcription: result.Transcription || null,
+        reasoning: result.Reasoning || null,
         ai_cost: result.estCost || 0,
       })
       .eq('id', submissionId);
