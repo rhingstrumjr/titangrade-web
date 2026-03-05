@@ -469,7 +469,7 @@ export default function SubmissionsView() {
                   <Pencil size={10} />
                 </button>
               )}
-              {totalAiCost > 0 && (
+              {totalAiCost !== undefined && (
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full" title="Total AI Cost for this assignment (including generation and grading)">
                   💲 Est. AI Cost: ${totalAiCost.toFixed(3)}
                 </span>
@@ -654,7 +654,7 @@ export default function SubmissionsView() {
                                             )}
                                           </div>
                                           <p className="text-xs text-gray-500">{new Date(sub.created_at).toLocaleString()}</p>
-                                          {Number(sub.ai_cost) > 0 && (
+                                          {sub.ai_cost !== undefined && sub.ai_cost !== null && (
                                             <p className="text-[10px] text-emerald-600 font-medium mt-0.5">Est. Cost: ${Number(sub.ai_cost).toFixed(4)}</p>
                                           )}
                                         </div>
