@@ -41,6 +41,7 @@ export async function POST(req: Request) {
     const { error: updateError } = await supabase
       .from('submissions')
       .update({
+        status: 'graded',
         score: result.Score,
         feedback: result.Feedback,
         email_sent: shouldSendEmail,
