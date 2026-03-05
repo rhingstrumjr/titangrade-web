@@ -180,10 +180,17 @@ export async function gradeSubmission(
   let rubricTextBlock: string;
   if (structured_rubric && structured_rubric.length > 0) {
     // Use structured rubric for maximum precision
-    const criteriaText = structured_rubric.map((c, i) =>
-      `  ${i + 1}. ${c.name} (${c.maxPoints} pts): ${c.description}`
-    ).join('\n');
-    rubricTextBlock = `\n  RUBRIC (Max Score: ${max_score}):\n  The following structured criteria must each be scored individually:\n${criteriaText}\n\n  IMPORTANT: Your CategoryScores MUST use these exact criterion names.`;
+    const criteriaText = structured_rubric.map((c, i) => {
+      let line = `  ${i + 1}. ${c.name} (${c.maxPoints} pts): ${c.description}`;
+      if (c.levels && c.levels.length > 0) {
+        const levelLines = c.levels.map(l =>
+          `      - ${l.label} (${l.points} pts): ${l.description}`
+        ).join('\n');
+        line += `\n    Performance Levels:\n${levelLines}`;
+      }
+      return line;
+    }).join('\n');
+    rubricTextBlock = `\n  RUBRIC (Max Score: ${max_score}):\n  The following structured criteria must each be scored individually:\n${criteriaText}\n\n  IMPORTANT: Your CategoryScores MUST use these exact criterion names.\n  When performance levels are provided, match the student's work to the closest performance level for each criterion.`;
   } else if (textRubrics.length > 0) {
     rubricTextBlock = `\n  RUBRIC (Max Score: ${max_score}):\n  ${textRubrics.join("\n\n---\n\n")}`;
   } else if (rubricFiles.length > 0) {

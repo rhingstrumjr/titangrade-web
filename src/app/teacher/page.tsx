@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon, Pencil, XCircle } from "lucide-react";
+import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon, Pencil, XCircle, Sparkles, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { AnswerKeyEditor } from "./AnswerKeyEditor";
 import { RubricBuilder } from "@/components/RubricBuilder";
@@ -53,11 +53,13 @@ export default function TeacherDashboard() {
   const [maxAttempts, setMaxAttempts] = useState(1);
   const [isSocratic, setIsSocratic] = useState(false);
   const [autoSendEmails, setAutoSendEmails] = useState(true);
-  const [rubricType, setRubricType] = useState<"text" | "file" | "structured">("text");
+  const [rubricType, setRubricType] = useState<"text" | "file">("text");
   const [newRubricText, setNewRubricText] = useState("");
   const [newRubricFiles, setNewRubricFiles] = useState<File[]>([]);
   const [newExemplarFiles, setNewExemplarFiles] = useState<File[]>([]);
   const [structuredCriteria, setStructuredCriteria] = useState<RubricCriterion[]>([]);
+  const [isAutoParsing, setIsAutoParsing] = useState(false);
+  const [autoParseError, setAutoParseError] = useState("");
   const [selectedClassesForNewAssignment, setSelectedClassesForNewAssignment] = useState<string[]>([]);
   const [createLoading, setCreateLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -113,19 +115,37 @@ export default function TeacherDashboard() {
     e.preventDefault();
     setCreateLoading(true);
 
+    // ── Auto-Parse Handler (inline) ──
+    // (moved to a separate function below)
+
     let finalRubricValue = newRubricText;
     let finalRubricsArray = newRubricText ? [newRubricText] : [];
     let finalStructuredRubric: RubricCriterion[] | null = null;
 
-    if (rubricType === "structured") {
-      // Auto-generate plain text from structured criteria for backward compat
+    // Always check if the builder has criteria (it's always visible now)
+    if (structuredCriteria.length > 0) {
       finalStructuredRubric = structuredCriteria.filter(c => c.name.trim());
-      const plainText = finalStructuredRubric.map(c =>
-        `${c.name} (${c.maxPoints} pts): ${c.description}`
-      ).join("\n");
-      finalRubricValue = plainText;
-      finalRubricsArray = [plainText];
-    } else if (rubricType === "file") {
+      if (finalStructuredRubric.length > 0) {
+        // Auto-generate plain text from structured criteria for backward compat
+        const plainText = finalStructuredRubric.map(c => {
+          let line = `${c.name} (${c.maxPoints} pts): ${c.description}`;
+          if (c.levels && c.levels.length > 0) {
+            const levelText = c.levels.map(l => `  - ${l.label} (${l.points} pts): ${l.description}`).join('\n');
+            line += '\n' + levelText;
+          }
+          return line;
+        }).join('\n\n');
+        // Only override text if rubric type is text and text is empty, or always set as fallback
+        if (!finalRubricValue.trim()) {
+          finalRubricValue = plainText;
+          finalRubricsArray = [plainText];
+        }
+      } else {
+        finalStructuredRubric = null;
+      }
+    }
+
+    if (rubricType === "file") {
       if (newRubricFiles.length > 0) {
         const uploadPromises = newRubricFiles.map(async (file) => {
           const fileExt = file.name.split('.').pop();
@@ -195,7 +215,7 @@ export default function TeacherDashboard() {
       finalExemplarArray = editingAssignment.exemplar_urls;
     }
 
-    const finalScore = gradingFramework === "marzano" ? 4 : (rubricType === "structured" && finalStructuredRubric ? finalStructuredRubric.reduce((sum, c) => sum + c.maxPoints, 0) : newScore);
+    const finalScore = gradingFramework === "marzano" ? 4 : (finalStructuredRubric && finalStructuredRubric.length > 0 ? finalStructuredRubric.reduce((sum, c) => sum + c.maxPoints, 0) : newScore);
 
     if (editingAssignment) {
       const { error } = await supabase
@@ -306,6 +326,7 @@ export default function TeacherDashboard() {
     setGeneratedKey(null);
     setGeneratedKeyCost(0);
     setStructuredCriteria([]);
+    setAutoParseError("");
   };
 
   const handleEditAssignment = (assignment: Assignment) => {
@@ -320,9 +341,10 @@ export default function TeacherDashboard() {
     setGeneratedKeyCost(assignment.ai_cost || 0);
 
     if (assignment.structured_rubric && assignment.structured_rubric.length > 0) {
-      setRubricType("structured");
       setStructuredCriteria(assignment.structured_rubric);
-    } else if (assignment.rubric && assignment.rubric.startsWith('http')) {
+    }
+
+    if (assignment.rubric && assignment.rubric.startsWith('http')) {
       setRubricType("file");
     } else {
       setRubricType("text");
@@ -643,13 +665,6 @@ export default function TeacherDashboard() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setRubricType("structured")}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${rubricType === "structured" ? "bg-white shadow-sm text-indigo-700" : "text-gray-500 hover:text-gray-700"}`}
-                    >
-                      Structured Builder
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => setRubricType("file")}
                       className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${rubricType === "file" ? "bg-white shadow-sm text-indigo-700" : "text-gray-500 hover:text-gray-700"}`}
                     >
@@ -658,20 +673,15 @@ export default function TeacherDashboard() {
                   </div>
                 </div>
 
+                {/* Input Area */}
                 {rubricType === "text" ? (
                   <textarea
-                    required={!editingAssignment}
+                    required={!editingAssignment && structuredCriteria.length === 0}
                     value={newRubricText}
                     onChange={(e) => setNewRubricText(e.target.value)}
                     placeholder="Paste your rubric and evaluation criteria here. The more detailed, the better the AI will grade."
                     rows={8}
                     className="w-full border border-gray-300 rounded-md p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
-                  />
-                ) : rubricType === "structured" ? (
-                  <RubricBuilder
-                    criteria={structuredCriteria}
-                    onChange={setStructuredCriteria}
-                    assignmentId={editingAssignment?.id}
                   />
                 ) : (
                   <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md bg-gray-50 hover:bg-gray-100 transition-colors">
@@ -682,7 +692,7 @@ export default function TeacherDashboard() {
                           <input
                             type="file"
                             className="sr-only"
-                            required={!editingAssignment}
+                            required={!editingAssignment && structuredCriteria.length === 0}
                             multiple
                             accept=".pdf, .png, .jpg, .jpeg"
                             onChange={(e) => {
@@ -704,6 +714,73 @@ export default function TeacherDashboard() {
                     </div>
                   </div>
                 )}
+
+                {/* Auto-Parse Button */}
+                {((rubricType === "text" && newRubricText.trim().length > 20) || (rubricType === "file" && newRubricFiles.length > 0)) && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsAutoParsing(true);
+                        setAutoParseError("");
+                        try {
+                          let body: Record<string, string> = {};
+                          if (rubricType === "file" && newRubricFiles.length > 0) {
+                            const file = newRubricFiles[0];
+                            const buffer = await file.arrayBuffer();
+                            const base64 = btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ""));
+                            body = { file: base64, mimeType: file.type };
+                          } else {
+                            body = { text: newRubricText };
+                          }
+                          if (editingAssignment) body.assignmentId = editingAssignment.id;
+
+                          const res = await fetch("/api/parse-rubric", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(body),
+                          });
+                          const data = await res.json();
+                          if (data.success && data.criteria) {
+                            setStructuredCriteria(data.criteria);
+                          } else {
+                            setAutoParseError(data.error || "Failed to parse rubric.");
+                          }
+                        } catch (err) {
+                          console.error(err);
+                          setAutoParseError("Error connecting to AI.");
+                        } finally {
+                          setIsAutoParsing(false);
+                        }
+                      }}
+                      disabled={isAutoParsing}
+                      className="flex items-center gap-2 w-full justify-center bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 border border-amber-200 text-amber-800 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-sm"
+                    >
+                      {isAutoParsing ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          Parsing rubric with AI...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={16} />
+                          ✨ Auto-Parse into Structured Rubric
+                        </>
+                      )}
+                    </button>
+                    {autoParseError && (
+                      <p className="text-sm text-red-600 mt-1">{autoParseError}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Structured Rubric Builder — always visible */}
+                <div className="mt-4">
+                  <RubricBuilder
+                    criteria={structuredCriteria}
+                    onChange={setStructuredCriteria}
+                  />
+                </div>
               </div>
 
               <div>

@@ -19,13 +19,15 @@ For each criterion, extract:
 - name: The category/criterion name (e.g., "Scientific Question", "Hypothesis", "Data Collection")
 - maxPoints: The maximum points for this criterion. If not explicitly stated, estimate based on context (default: 10)
 - description: A clear description of what earns full credit for this criterion. Include specific requirements from the rubric.
+- levels: If the rubric includes a breakdown by performance levels (e.g., Excellent/Proficient/Developing/Beginning or 4/3/2/1), extract EACH level with its label, point value, and description. 
 
 RULES:
 - Extract ALL criteria, even if they are listed as sub-sections
-- If the rubric uses descriptive levels (Excellent/Good/Fair/Poor), convert to point values
+- If the rubric uses descriptive levels (Excellent/Good/Fair/Poor), include them as performance levels AND convert to point values
 - If a Marzano proficiency scale is detected, use the levels (2.0, 3.0, 4.0) as criteria names with appropriate descriptions
 - Preserve the original rubric language as much as possible in the descriptions
-- Order criteria in the same order they appear in the rubric`;
+- Order criteria in the same order they appear in the rubric
+- Levels should be ordered from highest to lowest points`;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const messages: any[] = [];
@@ -34,14 +36,14 @@ RULES:
       messages.push({
         role: "user",
         content: [
-          { type: "text", text: "Parse the following rubric document into structured criteria:" },
+          { type: "text", text: "Parse the following rubric document into structured criteria with performance levels:" },
           { type: "file", data: file, mediaType: mimeType || "application/pdf" },
         ],
       });
     } else {
       messages.push({
         role: "user",
-        content: `Parse the following rubric text into structured criteria:\n\n${text}`,
+        content: `Parse the following rubric text into structured criteria with performance levels:\n\n${text}`,
       });
     }
 
@@ -56,6 +58,13 @@ RULES:
             name: z.string().describe("The criterion/category name"),
             maxPoints: z.number().describe("Maximum points for this criterion"),
             description: z.string().describe("What earns full credit for this criterion"),
+            levels: z.array(
+              z.object({
+                label: z.string().describe("Performance level name, e.g. Excellent, Proficient"),
+                points: z.number().describe("Points awarded at this level"),
+                description: z.string().describe("What this performance level looks like"),
+              })
+            ).optional().describe("Performance level breakdown from highest to lowest"),
           })
         ).describe("All extracted rubric criteria"),
       }),

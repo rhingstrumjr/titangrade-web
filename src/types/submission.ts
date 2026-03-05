@@ -1,7 +1,14 @@
+export interface RubricLevel {
+  label: string;       // e.g. "Excellent", "Proficient", "Developing", "Beginning"
+  points: number;      // e.g. 10, 7, 4, 1
+  description: string; // what this level looks like
+}
+
 export interface RubricCriterion {
   name: string;
   maxPoints: number;
-  description: string;
+  description: string;          // full-credit description (backward compat)
+  levels?: RubricLevel[];       // optional multi-level breakdown
 }
 
 export interface CategoryScore {
