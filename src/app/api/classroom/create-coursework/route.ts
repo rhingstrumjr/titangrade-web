@@ -1,13 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { cookies } from "next/headers";
 
 export async function POST(req: NextRequest) {
+  let token = null;
+
   const authHeader = req.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return NextResponse.json({ error: "Missing or invalid authorization header" }, { status: 401 });
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.split(" ")[1];
   }
 
-  const token = authHeader.split(" ")[1];
+  // Fallback to cookie if frontend did not provide it
+  if (!token) {
+    const cookieStore = await cookies();
+    token = cookieStore.get("provider_token")?.value;
+  }
+
+  if (!token) {
+    return NextResponse.json({ error: "Missing or invalid authorization token" }, { status: 401 });
+  }
 
   try {
     const body = await req.json();
