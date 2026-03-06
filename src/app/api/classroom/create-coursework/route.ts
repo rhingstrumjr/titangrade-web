@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { cookies } from "next/headers";
+import { syncClassroomSubmissions } from "@/lib/classroom";
 
 export async function POST(req: NextRequest) {
   let token = null;
@@ -78,6 +79,14 @@ export async function POST(req: NextRequest) {
     if (updateErr) {
       console.error("Failed to update assignment with GC IDs:", updateErr);
       return NextResponse.json({ error: "Created in GC but failed to save link in DB" }, { status: 500 });
+    }
+
+    // 5. AUTO-SYNC: Immediately pull students roster as pending submissions
+    try {
+      await syncClassroomSubmissions(assignmentId, courseId, gcCourseWork.id, token);
+    } catch (syncErr) {
+      console.error("Auto-sync failed during publication:", syncErr);
+      // We don't fail the whole request because the assignment was already created and linked
     }
 
     return NextResponse.json({ success: true, courseWorkId: gcCourseWork.id });

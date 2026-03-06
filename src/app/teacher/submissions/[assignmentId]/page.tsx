@@ -51,6 +51,7 @@ export default function SubmissionsView() {
   const [gcCourseId, setGcCourseId] = useState<string | null>(null);
   const [gcCourseworkId, setGcCourseworkId] = useState<string | null>(null);
   const [syncingToGc, setSyncingToGc] = useState(false);
+  const [syncingFromGc, setSyncingFromGc] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -126,6 +127,7 @@ export default function SubmissionsView() {
             filter: `assignment_id=eq.${assignmentId}`
           },
           (payload) => {
+            if (!payload || !payload.new) return;
             const updatedSub = payload.new as Submission;
             setStudentGroups(prevGroups => prevGroups.map(group => {
               if (group.email === updatedSub.student_email) {
@@ -543,7 +545,45 @@ export default function SubmissionsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingGcSubmissions.length]);
 
-  const handleSyncToClassroom = async () => {
+  const handleSyncFromClassroom = async () => {
+    if (!gcCourseId || !gcCourseworkId) return;
+    setSyncingFromGc(true);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const providerToken = session?.provider_token;
+    if (!providerToken) {
+      alert("Google Classroom authentication expired. Please return to the Dashboard to reconnect.");
+      setSyncingFromGc(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/classroom/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${providerToken}`
+        },
+        body: JSON.stringify({ assignmentId })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Sync failed");
+
+      if (data.newSubmissionsCount > 0) {
+        alert(`Successfully synced! Added ${data.newSubmissionsCount} new student submission(s).`);
+        window.location.reload();
+      } else {
+        alert("Already up to date with Google Classroom.");
+      }
+    } catch (err: any) {
+      console.error("Sync error:", err);
+      alert("Failed to sync: " + err.message);
+    }
+    setSyncingFromGc(false);
+  };
+
+  const handlePushGradesToGc = async () => {
     if (!gcCourseId || !gcCourseworkId) return;
 
     setSyncingToGc(true);
@@ -690,18 +730,32 @@ export default function SubmissionsView() {
               </button>
             )}
 
-            {gcCourseId && gcCourseworkId && studentGroups.length > 0 && (
+            {gcCourseId && gcCourseworkId && (
               <button
-                onClick={handleSyncToClassroom}
-                disabled={syncingToGc || isGradingGc}
+                onClick={handleSyncFromClassroom}
+                disabled={syncingFromGc || isGradingGc}
                 className="flex items-center gap-2 bg-[#dbedf9] border border-[#a2d0ef] text-[#1E3A8A] hover:bg-[#b0d9f5] disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
               >
+                {syncingFromGc ? (
+                  <><Loader2 size={16} className="animate-spin text-[#1E3A8A]" /> Syncing...</>
+                ) : (
+                  <><RefreshCw size={16} className="text-[#1E3A8A]" /> Sync Submissions from Classroom</>
+                )}
+              </button>
+            )}
+
+            {gcCourseId && gcCourseworkId && studentGroups.length > 0 && (
+              <button
+                onClick={handlePushGradesToGc}
+                disabled={syncingToGc || isGradingGc}
+                className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+              >
                 {syncingToGc ? (
-                  <><Loader2 size={16} className="animate-spin text-[#1E3A8A]" /> Syncing to GC...</>
+                  <><Loader2 size={16} className="animate-spin text-indigo-600" /> Releasing to GC...</>
                 ) : (
                   <>
-                    <svg className="w-4 h-4 text-[#1E3A8A]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-3H8v3H6v-7.14l6-4.46 6 4.46V16.5h-2v-3h-3v3h-2z" /></svg>
-                    Sync to Google Classroom
+                    <svg className="w-4 h-4 text-indigo-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-3H8v3H6v-7.14l6-4.46 6 4.46V16.5h-2v-3h-3v3h-2z" /></svg>
+                    Push Grades to Classroom
                   </>
                 )}
               </button>

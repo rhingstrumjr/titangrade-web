@@ -194,6 +194,16 @@ export default function TeacherDashboard() {
 
   const executeGoogleClassroomImport = async () => {
     if (!selectedGcCourseId || !selectedGcAssignmentId || !providerToken) return;
+
+    // Check if we already have this assignment imported
+    const existing = assignments.find(a => a.gc_coursework_id === selectedGcAssignmentId);
+    if (existing) {
+      alert("This assignment is already imported. Redirecting to submissions...");
+      setIsImportModalOpen(false);
+      window.location.href = `/teacher/submissions/${existing.id}`;
+      return;
+    }
+
     setIsImporting(true);
 
     try {
