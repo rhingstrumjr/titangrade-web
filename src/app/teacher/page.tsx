@@ -746,6 +746,13 @@ export default function TeacherDashboard() {
     }
   };
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    // Also clear the proxy cookie we set for Google Classroom
+    document.cookie = 'provider_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+    window.location.href = '/login';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-8">
       <div className="max-w-6xl mx-auto space-y-8">
@@ -757,6 +764,12 @@ export default function TeacherDashboard() {
             <p className="text-gray-500 mt-1">Manage your class assignments and view student submissions</p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleSignOut}
+              className="text-gray-500 hover:text-gray-900 transition-colors text-sm font-semibold px-2 mr-2"
+            >
+              Sign Out
+            </button>
             {!googleConnected ? (
               <button
                 onClick={handleGoogleLogin}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 // The client you created from the Server-Side Auth instructions
 import { createClient } from '@/utils/supabase/server'
+import { cookies } from 'next/headers'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -15,6 +16,17 @@ export async function GET(request: Request) {
 
     if (!error) {
       console.log('[Auth Callback] Successfully exchanged code for session! Redirecting to:', `${origin}${next}`);
+
+      if (data?.session?.provider_token) {
+        const cookieStore = await cookies();
+        cookieStore.set('provider_token', data.session.provider_token, {
+          path: '/',
+          httpOnly: false, // Accessible to frontend to check connection status
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 3500 // 1 hour minus a small buffer
+        });
+      }
+
       return NextResponse.redirect(`${origin}${next}`)
     } else {
       console.error('[Auth Callback] Error exchanging code for session:', error.message, error);

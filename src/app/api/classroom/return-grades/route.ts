@@ -1,11 +1,27 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 export async function POST(req: Request) {
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Missing Authorization header' }, { status: 401 });
+    let token = null;
+    let authHeaderField = req.headers.get('Authorization');
+
+    if (authHeaderField && authHeaderField.startsWith('Bearer ')) {
+      token = authHeaderField.split(" ")[1];
+    } else if (authHeaderField) {
+      token = authHeaderField; // in case passed without Bearer prefix
     }
+
+    if (!token) {
+      const cookieStore = await cookies();
+      token = cookieStore.get("provider_token")?.value;
+    }
+
+    if (!token) {
+      return NextResponse.json({ error: 'Missing or invalid authorization token' }, { status: 401 });
+    }
+
+    const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
 
     const { courseId, courseWorkId, grades } = await req.json();
 
