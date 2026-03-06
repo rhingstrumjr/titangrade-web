@@ -34,6 +34,8 @@ interface Assignment {
   is_socratic: boolean;
   auto_send_emails: boolean;
   class_id?: string | null;
+  gc_course_id?: string | null;
+  gc_coursework_id?: string | null;
   generated_key?: any;
   structured_rubric?: RubricCriterion[];
   ai_cost?: number;
@@ -56,6 +58,9 @@ export default function TeacherDashboard() {
   const [selectedGcAssignmentId, setSelectedGcAssignmentId] = useState<string>("");
   const [isFetchingGc, setIsFetchingGc] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [publishTargetAssignmentId, setPublishTargetAssignmentId] = useState<string | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -239,6 +244,51 @@ export default function TeacherDashboard() {
 
     setIsImporting(false);
     setIsImportModalOpen(false);
+  };
+
+  const handleOpenPublishModal = async (assignmentId: string) => {
+    setPublishTargetAssignmentId(assignmentId);
+    setSelectedGcCourseId("");
+    setIsPublishModalOpen(true);
+    if (gcCourses.length === 0 && providerToken) {
+      setIsFetchingGc(true);
+      try {
+        const res = await fetch("/api/classroom/courses", {
+          headers: { Authorization: `Bearer ${providerToken}` }
+        });
+        const data = await res.json();
+        if (data.courses) {
+          setGcCourses(data.courses);
+        }
+      } catch (err) {
+        console.error("Failed to fetch courses", err);
+      }
+      setIsFetchingGc(false);
+    }
+  };
+
+  const executePublishToGc = async () => {
+    if (!publishTargetAssignmentId || !selectedGcCourseId || !providerToken) return;
+    setIsPublishing(true);
+    try {
+      const res = await fetch("/api/classroom/create-coursework", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${providerToken}` },
+        body: JSON.stringify({ assignmentId: publishTargetAssignmentId, courseId: selectedGcCourseId })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      // Successfully published. Refresh assignments.
+      await fetchAssignments();
+      setIsPublishModalOpen(false);
+      setPublishTargetAssignmentId(null);
+      alert("Successfully published assignment to Google Classroom!");
+    } catch (err: any) {
+      console.error(err);
+      alert("Error publishing to Google Classroom: " + err.message);
+    }
+    setIsPublishing(false);
   };
 
   const handleCreateAssignment = async (e: React.FormEvent) => {
@@ -1219,14 +1269,31 @@ export default function TeacherDashboard() {
                       <Users size={16} className="mr-1.5" />
                       View Submissions
                     </Link>
-                    <button
-                      onClick={() => copyToClipboard(assignment.id)}
-                      className="flex items-center text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-100 px-2 py-1 transition-colors"
-                      title="Copy Student Submission Link"
-                    >
-                      <LinkIcon size={14} className="mr-1.5" />
-                      Copy Link
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {!assignment.gc_coursework_id && googleConnected && (
+                        <button
+                          onClick={() => handleOpenPublishModal(assignment.id)}
+                          className="flex items-center text-sm font-medium text-emerald-600 hover:text-emerald-800 border border-emerald-300 rounded hover:bg-emerald-50 px-2 py-1 transition-colors bg-white shadow-sm"
+                          title="Publish to Google Classroom"
+                        >
+                          <svg className="w-3.5 h-3.5 mr-1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                          </svg>
+                          Publish to GC
+                        </button>
+                      )}
+                      <button
+                        onClick={() => copyToClipboard(assignment.id)}
+                        className="flex items-center text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-100 px-2 py-1 transition-colors bg-white shadow-sm"
+                        title="Copy Student Submission Link"
+                      >
+                        <LinkIcon size={14} className="mr-1.5" />
+                        Copy Link
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1449,6 +1516,78 @@ export default function TeacherDashboard() {
                   <><Loader2 className="animate-spin h-4 w-4 mr-2" /> Importing...</>
                 ) : (
                   "Import Submissions"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Publish to Google Classroom Modal */}
+      {isPublishModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-xl w-full flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-xl">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                </svg>
+                Publish to Google Classroom
+              </h3>
+              <button disabled={isPublishing} onClick={() => setIsPublishModalOpen(false)} className="text-gray-400 hover:text-gray-600 disabled:opacity-50">
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-6">
+              {isFetchingGc && gcCourses.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+                  <Loader2 className="animate-spin h-8 w-8 mb-4 text-emerald-600" />
+                  <p>Fetching your classes from Google...</p>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-gray-700">Select Google Classroom Course</label>
+                    <select
+                      className="w-full border border-gray-300 rounded-md p-2.5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                      value={selectedGcCourseId}
+                      onChange={(e) => setSelectedGcCourseId(e.target.value)}
+                      disabled={isPublishing}
+                    >
+                      <option value="">-- Choose a Class --</option>
+                      {gcCourses.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-2">
+                      This will create a new coursework assignment in Google Classroom.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl flex justify-end gap-3">
+              <button
+                onClick={() => setIsPublishModalOpen(false)}
+                disabled={isPublishing}
+                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executePublishToGc}
+                disabled={!selectedGcCourseId || isPublishing}
+                className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:opacity-50 flex items-center shadow-sm"
+              >
+                {isPublishing ? (
+                  <><Loader2 className="animate-spin h-4 w-4 mr-2" /> Publishing...</>
+                ) : (
+                  "Publish"
                 )}
               </button>
             </div>

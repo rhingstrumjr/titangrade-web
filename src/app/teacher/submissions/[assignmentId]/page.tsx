@@ -111,9 +111,47 @@ export default function SubmissionsView() {
         setSelectedForRegrade(initialSelection);
       }
       setLoading(false);
+
+      // Subscribe to real-time changes
+      const channel = supabase
+        .channel('submissions_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'submissions',
+            filter: `assignment_id=eq.${assignmentId}`
+          },
+          (payload) => {
+            const updatedSub = payload.new as Submission;
+            setStudentGroups(prevGroups => prevGroups.map(group => {
+              if (group.email === updatedSub.student_email) {
+                const updatedSubmissions = group.submissions.map(s =>
+                  s.id === updatedSub.id ? updatedSub : s
+                );
+                return {
+                  ...group,
+                  submissions: updatedSubmissions,
+                  latestStatus: updatedSub.status,
+                  latestScore: updatedSub.score || group.latestScore
+                };
+              }
+              return group;
+            }));
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
 
-    fetchData();
+    const cleanup = fetchData();
+    return () => {
+      cleanup.then(fn => fn && fn());
+    };
   }, [assignmentId]);
 
   const toggleExpand = (email: string) => {
@@ -450,88 +488,40 @@ export default function SubmissionsView() {
       return;
     }
 
-    for (let i = 0; i < pendingGcSubmissions.length; i++) {
-      const sub = pendingGcSubmissions[i];
-      const fileId = sub.file_url.replace('drive:', '');
+    try {
+      const res = await fetch('/api/classroom/grade-batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${providerToken}`
+        },
+        body: JSON.stringify({
+          submissions: pendingGcSubmissions,
+          assignmentId
+        })
+      });
 
-      try {
-        // 1. Download file via our API to bypass CORS
-        const dlRes = await fetch(`/api/classroom/download?fileId=${fileId}`, {
-          headers: { Authorization: `Bearer ${providerToken}` }
-        });
-
-        if (!dlRes.ok) throw new Error("Failed to download file from Google Drive");
-
-        const blob = await dlRes.blob();
-        // Get content disposition filename or default
-        const contentDisposition = dlRes.headers.get('Content-Disposition');
-        let filename = `submission_${sub.student_name.replace(/\s+/g, '_')}.pdf`;
-        if (contentDisposition && contentDisposition.includes('filename="')) {
-          filename = contentDisposition.split('filename="')[1].split('"')[0];
-        }
-
-        const file = new File([blob], filename, { type: blob.type });
-
-        // 2. Upload to Supabase Storage
-        const filePath = `${assignmentId}/${Date.now()}_${Math.random().toString(36).substring(7)}_${filename}`;
-        const { error: uploadError } = await supabase.storage.from('submissions').upload(filePath, file);
-        if (uploadError) throw new Error("Failed to upload to storage: " + uploadError.message);
-
-        const { data: publicUrlData } = supabase.storage.from('submissions').getPublicUrl(filePath);
-        const finalUrl = publicUrlData.publicUrl;
-
-        // 3. Update DB record
-        await supabase.from('submissions').update({ file_url: finalUrl, file_urls: [finalUrl] }).eq('id', sub.id);
-
-        // 4. Trigger grading API
-        const gradeRes = await fetch('/api/grade', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ submissionId: sub.id, sendEmail: false })
-        });
-
-        let newStatus = 'graded';
-        let newScore = '';
-
-        let gradedData: any = {};
-
-        if (!gradeRes.ok) {
-          const errData = await gradeRes.json();
-          await supabase.from('submissions').update({ status: 'error', feedback: errData.error }).eq('id', sub.id);
-          newStatus = 'error';
-        } else {
-          gradedData = await gradeRes.json();
-          newScore = gradedData.score;
-        }
-
-        // Live update the UI
-        setStudentGroups(prevGroups => prevGroups.map(group => {
-          if (group.email === sub.student_email) {
-            const updatedSubmissions = group.submissions.map(s =>
-              s.id === sub.id ? {
-                ...s,
-                file_url: finalUrl,
-                file_urls: [finalUrl],
-                status: newStatus as any,
-                score: newScore,
-                feedback: gradedData.feedback || s.feedback,
-                category_scores: gradedData.categoryScores || s.category_scores,
-                skill_assessments: gradedData.skillAssessments || s.skill_assessments,
-                transcription: gradedData.transcription || s.transcription,
-                reasoning: gradedData.reasoning || s.reasoning
-              } : s
-            );
-            return { ...group, submissions: updatedSubmissions, latestStatus: newStatus as any, latestScore: newScore || group.latestScore };
-          }
-          return group;
-        }));
-
-      } catch (err: any) {
-        console.error("Error grading submission:", sub.id, err);
-        await supabase.from('submissions').update({ status: 'error', feedback: err.message || "Failed to grade Google Classroom attachment." }).eq('id', sub.id);
+      if (!res.ok) {
+        throw new Error("Failed to start batch grading");
       }
 
-      setGcProgress({ current: i + 1, total: pendingGcSubmissions.length });
+      // We immediately update the UI state to 'grading' locally so it responds fast
+      // The realtime subscription will handle the completion updates
+      setStudentGroups(prevGroups => prevGroups.map(group => {
+        const hasPending = pendingGcSubmissions.some(s => s.student_email === group.email);
+        if (hasPending) {
+          const updatedSubmissions = group.submissions.map(s =>
+            pendingGcSubmissions.some(ps => ps.id === s.id) ? { ...s, status: 'grading' as any } : s
+          );
+          return { ...group, submissions: updatedSubmissions, latestStatus: 'grading' as any };
+        }
+        return group;
+      }));
+      setGcProgress({ current: pendingGcSubmissions.length, total: pendingGcSubmissions.length });
+
+    } catch (err: any) {
+      console.error("Batch grade error:", err);
+      alert("Failed to start batch grading: " + err.message);
     }
 
     setIsGradingGc(false);
