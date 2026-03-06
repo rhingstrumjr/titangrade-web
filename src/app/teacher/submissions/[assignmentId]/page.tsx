@@ -493,39 +493,49 @@ export default function SubmissionsView() {
     }
 
     try {
-      const res = await fetch('/api/classroom/grade-batch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${providerToken}`
-        },
-        body: JSON.stringify({
-          submissions: pendingGcSubmissions,
-          assignmentId
-        })
-      });
+      // Parallel batching: Process up to 5 at a time to avoid slamming the server but keep it fast
+      const batchSize = 5;
+      for (let i = 0; i < pendingGcSubmissions.length; i += batchSize) {
+        const batch = pendingGcSubmissions.slice(i, i + batchSize);
 
-      if (!res.ok) {
-        throw new Error("Failed to start batch grading");
+        // Update UI state to 'grading' locally for this batch
+        setStudentGroups(prevGroups => prevGroups.map(group => {
+          const inBatch = batch.some(s => s.student_email === group.email);
+          if (inBatch) {
+            const updatedSubmissions = group.submissions.map(s =>
+              batch.some(ps => ps.id === s.id) ? { ...s, status: 'grading' as any } : s
+            );
+            return { ...group, submissions: updatedSubmissions, latestStatus: 'grading' as any };
+          }
+          return group;
+        }));
+
+        await Promise.all(batch.map(async (submission) => {
+          try {
+            const res = await fetch('/api/classroom/grade-single-bg', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${providerToken}`
+              },
+              body: JSON.stringify({ submission, assignmentId })
+            });
+
+            if (!res.ok) {
+              const err = await res.json();
+              console.error(`Single grade error for ${submission.id}:`, err);
+            }
+          } catch (e) {
+            console.error(`Fetch error for ${submission.id}:`, e);
+          } finally {
+            setGcProgress(prev => ({ ...prev, current: prev.current + 1 }));
+          }
+        }));
       }
-
-      // We immediately update the UI state to 'grading' locally so it responds fast
-      // The realtime subscription will handle the completion updates
-      setStudentGroups(prevGroups => prevGroups.map(group => {
-        const hasPending = pendingGcSubmissions.some(s => s.student_email === group.email);
-        if (hasPending) {
-          const updatedSubmissions = group.submissions.map(s =>
-            pendingGcSubmissions.some(ps => ps.id === s.id) ? { ...s, status: 'grading' as any } : s
-          );
-          return { ...group, submissions: updatedSubmissions, latestStatus: 'grading' as any };
-        }
-        return group;
-      }));
-      setGcProgress({ current: pendingGcSubmissions.length, total: pendingGcSubmissions.length });
 
     } catch (err: any) {
       console.error("Batch grade error:", err);
-      alert("Failed to start batch grading: " + err.message);
+      alert("An error occurred during batch grading. Some submissions may have failed.");
     }
 
     setIsGradingGc(false);
@@ -992,94 +1002,103 @@ export default function SubmissionsView() {
                                       </div>
                                     </div>
 
-                                    {/* Feedback & Editing Actions row */}
-                                    {sub.status === 'graded' && (
+                                    {/* Feedback & Error row */}
+                                    {(sub.status === 'graded' || sub.status === 'error') && (
                                       <div className="pt-3 border-t border-gray-100 flex flex-col gap-2">
-                                        {editingSubId === sub.id ? (
+                                        {sub.status === 'error' && (
+                                          <div className="bg-red-50 border border-red-100 p-3 rounded-lg text-red-700 text-xs mb-2">
+                                            <strong>Error:</strong> {sub.feedback || "An unknown error occurred during grading."}
+                                          </div>
+                                        )}
+                                        {sub.status === 'graded' && (
                                           <>
-                                            <p className="text-xs text-gray-500 uppercase font-semibold">Feedback</p>
-                                            <textarea
-                                              value={editFeedback}
-                                              onChange={(e) => setEditFeedback(e.target.value)}
-                                              rows={3}
-                                              className="border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none w-full"
-                                            />
-                                            <CategoryBreakdown
-                                              sub={sub}
-                                              isEditing={true}
-                                              editSkillAssessments={editSkillAssessments}
-                                              setEditSkillAssessments={setEditSkillAssessments}
-                                              editCategoryScores={editCategoryScores}
-                                              setEditCategoryScores={setEditCategoryScores}
-                                            />
+                                            {editingSubId === sub.id ? (
+                                              <>
+                                                <p className="text-xs text-gray-500 uppercase font-semibold">Feedback</p>
+                                                <textarea
+                                                  value={editFeedback}
+                                                  onChange={(e) => setEditFeedback(e.target.value)}
+                                                  rows={3}
+                                                  className="border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none w-full"
+                                                />
+                                                <CategoryBreakdown
+                                                  sub={sub}
+                                                  isEditing={true}
+                                                  editSkillAssessments={editSkillAssessments}
+                                                  setEditSkillAssessments={setEditSkillAssessments}
+                                                  editCategoryScores={editCategoryScores}
+                                                  setEditCategoryScores={setEditCategoryScores}
+                                                />
 
-                                            <div className="flex justify-end gap-2 mt-2">
-                                              <button onClick={(e) => { e.stopPropagation(); cancelEditing(); }} className="flex items-center px-3 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors relative z-10">
-                                                <X size={14} className="mr-1" /> Cancel
-                                              </button>
-                                              <button onClick={(e) => { e.stopPropagation(); saveGradeOverride(sub, group.email); }} className="flex items-center px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors relative z-10">
-                                                <Save size={14} className="mr-1" /> Save Changes
-                                              </button>
-                                            </div>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <div className="flex justify-between items-start gap-4">
-                                              <div className="flex-1">
-                                                <p className="text-xs text-gray-500 uppercase font-semibold mb-1">Feedback</p>
-                                                <p className="text-gray-700 italic">&quot;{sub.feedback}&quot;</p>
-                                              </div>
-                                              <button onClick={(e) => { e.stopPropagation(); startEditing(sub); }} className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-indigo-600 transition-colors bg-white border border-gray-200 hover:border-indigo-200 px-3 py-1.5 rounded-md relative z-10">
-                                                <Edit2 size={14} /> Edit Grade
-                                              </button>
-                                            </div>
-
-                                            {/* Before/After Feedback Comparison (expandable) */}
-                                            {sub.pre_regrade_feedback && (
-                                              <details className="mt-2">
-                                                <summary className="cursor-pointer text-xs font-medium text-purple-600 hover:text-purple-800 transition-colors">
-                                                  View previous feedback (before regrade)
-                                                </summary>
-                                                <div className="mt-2 bg-purple-50 border border-purple-100 rounded-lg p-3">
-                                                  <p className="text-xs text-purple-500 uppercase font-semibold mb-1">Previous Feedback</p>
-                                                  <p className="text-sm text-purple-800 italic">&quot;{sub.pre_regrade_feedback}&quot;</p>
+                                                <div className="flex justify-end gap-2 mt-2">
+                                                  <button onClick={(e) => { e.stopPropagation(); cancelEditing(); }} className="flex items-center px-3 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors relative z-10">
+                                                    <X size={14} className="mr-1" /> Cancel
+                                                  </button>
+                                                  <button onClick={(e) => { e.stopPropagation(); saveGradeOverride(sub, group.email); }} className="flex items-center px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors relative z-10">
+                                                    <Save size={14} className="mr-1" /> Save Changes
+                                                  </button>
                                                 </div>
-                                              </details>
-                                            )}
-
-                                            {/* Category/Skill Breakdown */}
-                                            <CategoryBreakdown sub={sub} />
-
-                                            {/* AI Grading Details (Transcription & Reasoning) */}
-                                            {((sub.transcription?.length ?? 0) > 0 || (sub.reasoning?.length ?? 0) > 0) && (
-                                              <details className="mt-4 border border-indigo-100 rounded-lg bg-indigo-50/50">
-                                                <summary className="cursor-pointer text-sm font-semibold text-indigo-700 hover:text-indigo-800 transition-colors p-3 bg-indigo-50/80 rounded-t-lg">
-                                                  View AI Grading Details (Transcription & Reasoning)
-                                                </summary>
-                                                <div className="p-4 space-y-4">
-                                                  {sub.transcription && sub.transcription.length > 0 && (
-                                                    <div>
-                                                      <h4 className="text-xs uppercase font-bold text-indigo-900 mb-2">1. AI Extracted Answers</h4>
-                                                      <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
-                                                        {sub.transcription.map((step, idx) => (
-                                                          <li key={idx}>{step}</li>
-                                                        ))}
-                                                      </ul>
-                                                    </div>
-                                                  )}
-
-                                                  {sub.reasoning && sub.reasoning.length > 0 && (
-                                                    <div>
-                                                      <h4 className="text-xs uppercase font-bold text-indigo-900 mb-2">2. AI Scoring Reasoning</h4>
-                                                      <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
-                                                        {sub.reasoning.map((step, idx) => (
-                                                          <li key={idx}>{step}</li>
-                                                        ))}
-                                                      </ul>
-                                                    </div>
-                                                  )}
+                                              </>
+                                            ) : (
+                                              <>
+                                                <div className="flex justify-between items-start gap-4">
+                                                  <div className="flex-1">
+                                                    <p className="text-xs text-gray-500 uppercase font-semibold mb-1">Feedback</p>
+                                                    <p className="text-gray-700 italic">&quot;{sub.feedback}&quot;</p>
+                                                  </div>
+                                                  <button onClick={(e) => { e.stopPropagation(); startEditing(sub); }} className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-indigo-600 transition-colors bg-white border border-gray-200 hover:border-indigo-200 px-3 py-1.5 rounded-md relative z-10">
+                                                    <Edit2 size={14} /> Edit Grade
+                                                  </button>
                                                 </div>
-                                              </details>
+
+                                                {/* Before/After Feedback Comparison (expandable) */}
+                                                {sub.pre_regrade_feedback && (
+                                                  <details className="mt-2">
+                                                    <summary className="cursor-pointer text-xs font-medium text-purple-600 hover:text-purple-800 transition-colors">
+                                                      View previous feedback (before regrade)
+                                                    </summary>
+                                                    <div className="mt-2 bg-purple-50 border border-purple-100 rounded-lg p-3">
+                                                      <p className="text-xs text-purple-500 uppercase font-semibold mb-1">Previous Feedback</p>
+                                                      <p className="text-sm text-purple-800 italic">&quot;{sub.pre_regrade_feedback}&quot;</p>
+                                                    </div>
+                                                  </details>
+                                                )}
+
+                                                {/* Category/Skill Breakdown */}
+                                                <CategoryBreakdown sub={sub} />
+
+                                                {/* AI Grading Details (Transcription & Reasoning) */}
+                                                {((sub.transcription?.length ?? 0) > 0 || (sub.reasoning?.length ?? 0) > 0) && (
+                                                  <details className="mt-4 border border-indigo-100 rounded-lg bg-indigo-50/50">
+                                                    <summary className="cursor-pointer text-sm font-semibold text-indigo-700 hover:text-indigo-800 transition-colors p-3 bg-indigo-50/80 rounded-t-lg">
+                                                      View AI Grading Details (Transcription & Reasoning)
+                                                    </summary>
+                                                    <div className="p-4 space-y-4">
+                                                      {sub.transcription && sub.transcription.length > 0 && (
+                                                        <div>
+                                                          <h4 className="text-xs uppercase font-bold text-indigo-900 mb-2">1. AI Extracted Answers</h4>
+                                                          <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+                                                            {sub.transcription.map((step: any, idx: number) => (
+                                                              <li key={idx}>{step}</li>
+                                                            ))}
+                                                          </ul>
+                                                        </div>
+                                                      )}
+
+                                                      {sub.reasoning && sub.reasoning.length > 0 && (
+                                                        <div>
+                                                          <h4 className="text-xs uppercase font-bold text-indigo-900 mb-2">2. AI Scoring Reasoning</h4>
+                                                          <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+                                                            {sub.reasoning.map((step: any, idx: number) => (
+                                                              <li key={idx}>{step}</li>
+                                                            ))}
+                                                          </ul>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  </details>
+                                                )}
+                                              </>
                                             )}
                                           </>
                                         )}

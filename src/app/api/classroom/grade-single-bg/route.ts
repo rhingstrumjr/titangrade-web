@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { downloadDriveFile } from "@/lib/classroom";
 
 export async function POST(req: NextRequest) {
   let currentSubmission: any = null;
@@ -19,36 +20,21 @@ export async function POST(req: NextRequest) {
     }
 
     currentSubmission = submission;
+    console.log(`Starting background grade for submission ${submission.id} (student: ${submission.student_name})`);
 
     // Mark as grading
     await supabase.from('submissions').update({ status: 'grading' }).eq('id', submission.id);
 
     const fileId = submission.file_url.replace('drive:', '');
+    console.log(`Downloading file ${fileId} from Drive...`);
 
-    // 1. Download file via our API
-    // We use the absolute URL of our own host so the fetch works server-side
-    const host = req.headers.get("host") || "localhost:3000";
-    const protocol = host.includes("localhost") ? "http" : "https";
-
-    const dlRes = await fetch(`${protocol}://${host}/api/classroom/download?fileId=${fileId}`, {
-      headers: { Authorization: `Bearer ${providerToken}` }
-    });
-
-    if (!dlRes.ok) throw new Error("Failed to download file from Google Drive");
-
-    const arrayBuffer = await dlRes.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const contentType = dlRes.headers.get('Content-Type') || 'application/pdf';
-
-    const contentDisposition = dlRes.headers.get('Content-Disposition');
-    let filename = `submission_${submission.student_name.replace(/\s+/g, '_')}.pdf`;
-    if (contentDisposition && contentDisposition.includes('filename="')) {
-      filename = contentDisposition.split('filename="')[1].split('"')[0];
-    }
+    // 1. Download file directly via our lib (no internal fetch)
+    const { buffer, mimeType, filename } = await downloadDriveFile(fileId, providerToken);
+    console.log(`Download complete: ${filename} (${mimeType}), size: ${buffer.length} bytes`);
 
     // 2. Upload to Supabase Storage
     const filePath = `${assignmentId}/${Date.now()}_${Math.random().toString(36).substring(7)}_${filename}`;
-    const { error: uploadError } = await supabase.storage.from('submissions').upload(filePath, buffer, { contentType });
+    const { error: uploadError } = await supabase.storage.from('submissions').upload(filePath, buffer, { contentType: mimeType });
     if (uploadError) throw new Error("Failed to upload to storage: " + uploadError.message);
 
     const { data: publicUrlData } = supabase.storage.from('submissions').getPublicUrl(filePath);
@@ -58,6 +44,9 @@ export async function POST(req: NextRequest) {
     await supabase.from('submissions').update({ file_url: finalUrl, file_urls: [finalUrl] }).eq('id', submission.id);
 
     // 4. Trigger grading API
+    const host = req.headers.get("host") || "localhost:3000";
+    const protocol = host.includes("localhost") ? "http" : "https";
+
     const gradeRes = await fetch(`${protocol}://${host}/api/grade`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

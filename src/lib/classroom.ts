@@ -82,3 +82,60 @@ export async function syncClassroomSubmissions(
 
   return { count: newsOnly.length, totalFetched: submissionsToUpsert.length };
 }
+
+/**
+ * Downloads a file from Google Drive and returns it as a Buffer with its metadata.
+ */
+export async function downloadDriveFile(fileId: string, token: string) {
+  // 1. Get file metadata to determine MIME type
+  const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=mimeType,name`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!metaRes.ok) {
+    const err = await metaRes.json();
+    console.error("Drive metadata error:", err);
+    throw new Error(`Failed to get file metadata: ${JSON.stringify(err)}`);
+  }
+  const meta = await metaRes.json();
+
+  let downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+  let outMimeType = meta.mimeType;
+
+  // 2. Map Google Workspace formats to PDF export
+  if (
+    meta.mimeType === "application/vnd.google-apps.document" ||
+    meta.mimeType === "application/vnd.google-apps.presentation" ||
+    meta.mimeType === "application/vnd.google-apps.spreadsheet"
+  ) {
+    downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/pdf`;
+    outMimeType = "application/pdf";
+  }
+
+  // 3. Download the actual file / exported file
+  const fileRes = await fetch(downloadUrl, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!fileRes.ok) {
+    const errorText = await fileRes.text();
+    console.error(`Drive fetch failed for ${fileId}. Status: ${fileRes.status}, Body: ${errorText}`);
+    throw new Error(`Google Drive API Error (${fileRes.status}): ${errorText}`);
+  }
+
+  const arrayBuffer = await fileRes.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  // Ensure filename is safe for Content-Disposition header
+  const safeName = (meta.name || 'document').replace(/[^a-zA-Z0-9.\-_ ()]/g, "_");
+  // Ensure it has a pdf extension if we exported it
+  const finalName = outMimeType === "application/pdf" && !safeName.toLowerCase().endsWith('.pdf')
+    ? `${safeName}.pdf`
+    : safeName;
+
+  return {
+    buffer,
+    mimeType: outMimeType || "application/octet-stream",
+    filename: finalName
+  };
+}
