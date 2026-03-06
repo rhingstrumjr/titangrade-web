@@ -291,6 +291,23 @@ export default function TeacherDashboard() {
     setIsPublishing(false);
   };
 
+  const handleCopyFromAssignment = (assignmentId: string) => {
+    if (!assignmentId) return;
+    const source = assignments.find(a => a.id === assignmentId);
+    if (source) {
+      setNewTitle(source.title + " (Copy)");
+      setGradingFramework(source.grading_framework || "standard");
+      setNewScore(source.max_score || 100);
+
+      // If the source had a file-based rubric originally, 
+      // the contents would just be the URL in the rubric text field.
+      // We'll set it as text so it can be edited or overwritten.
+      setRubricType("text");
+      setNewRubricText(source.rubric || "");
+      setStructuredCriteria(source.structured_rubric || []);
+    }
+  };
+
   const handleCreateAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateLoading(true);
@@ -779,6 +796,26 @@ export default function TeacherDashboard() {
               </button>
             </div>
             <form onSubmit={handleCreateAssignment} className="space-y-6">
+              {!editingAssignment && assignments.length > 0 && (
+                <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-lg flex items-start gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="text-indigo-600 mt-0.5">
+                    <Copy size={20} />
+                  </div>
+                  <div className="flex-grow">
+                    <label className="block text-sm font-semibold text-indigo-900 mb-1">Save time: Copy rubric from existing assignment</label>
+                    <select
+                      className="w-full border border-indigo-200 rounded-md p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 bg-white shadow-sm"
+                      onChange={(e) => handleCopyFromAssignment(e.target.value)}
+                      defaultValue=""
+                    >
+                      <option value="" disabled>-- Select an assignment to copy from... --</option>
+                      {assignments.map(a => (
+                        <option key={a.id} value={a.id}>{a.title} {a.class_id ? `(${classes.find(c => c.id === a.class_id)?.name})` : ""}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="md:col-span-3">
                   <label className="block text-sm font-semibold mb-1">Assignment Title</label>
