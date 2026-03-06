@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
 import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon, Pencil, XCircle, Sparkles, Loader2, Copy } from "lucide-react";
+
+const supabase = createClient();
+
 import Link from "next/link";
 import { AnswerKeyEditor } from "./AnswerKeyEditor";
 import { RubricBuilder } from "@/components/RubricBuilder";

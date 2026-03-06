@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+
+const supabase = createClient();
 import { ArrowLeft, BarChart3, AlertTriangle, Lightbulb, Loader2, TrendingDown, TrendingUp, Users, CheckCircle2 } from "lucide-react";
 import type { CategoryScore, SkillAssessment, Submission } from "@/types/submission";
 
@@ -482,8 +484,8 @@ export default function AnalyticsPage() {
                     });
                   }}
                   className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedTroubleSpots.has(ts.criterion)
-                      ? "bg-indigo-50/50 border-indigo-200"
-                      : "bg-gray-50 border-gray-100 opacity-60"
+                    ? "bg-indigo-50/50 border-indigo-200"
+                    : "bg-gray-50 border-gray-100 opacity-60"
                     }`}
                 >
                   <input

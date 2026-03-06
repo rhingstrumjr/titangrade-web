@@ -9,13 +9,26 @@ export async function GET(request: Request) {
   const next = searchParams.get('next') ?? '/teacher'
 
   if (code) {
+    console.log('[Auth Callback] Received code from Google OAuth, attempting to exchange for session...');
     const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { error, data } = await supabase.auth.exchangeCodeForSession(code)
+
     if (!error) {
+      console.log('[Auth Callback] Successfully exchanged code for session! Redirecting to:', `${origin}${next}`);
       return NextResponse.redirect(`${origin}${next}`)
+    } else {
+      console.error('[Auth Callback] Error exchanging code for session:', error.message, error);
+    }
+  } else {
+    // If there's an error param in the URL directly from the OAuth provider (e.g. user denied access, or missing redirect URL)
+    const errDesc = searchParams.get('error_description');
+    if (errDesc) {
+      console.error('[Auth Callback] OAuth Provider returned an error:', errDesc);
+    } else {
+      console.error('[Auth Callback] No code provided in the callback URL.');
     }
   }
 
-  // return the user to an error page with instructions
+  // return the user to an error page with instructions (appending the message if available to the URL)
   return NextResponse.redirect(`${origin}/login?error=auth-callback-failed`)
 }

@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+
+const supabase = createClient();
 import { ArrowLeft, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronRight, FileText, Download, Star, Edit2, X, Save, Send, RefreshCw, Loader2, BarChart3, Pencil } from "lucide-react";
 
 import { Submission, StudentGroup } from "@/types/submission";

@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
 import { UploadCloud, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useParams } from "next/navigation";
+
+const supabase = createClient();
 
 export default function SubmitPage() {
   const params = useParams();

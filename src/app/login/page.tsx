@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
 import { LogIn, UserPlus } from "lucide-react";
+
+const supabase = createClient();
 
 export default function LoginPage() {
   const router = useRouter();
