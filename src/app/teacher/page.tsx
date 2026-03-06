@@ -62,6 +62,7 @@ export default function TeacherDashboard() {
   const [isFetchingGc, setIsFetchingGc] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [publishAsDraft, setPublishAsDraft] = useState(true);
   const [publishTargetAssignmentId, setPublishTargetAssignmentId] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
 
@@ -277,7 +278,11 @@ export default function TeacherDashboard() {
       const res = await fetch("/api/classroom/create-coursework", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${providerToken}` },
-        body: JSON.stringify({ assignmentId: publishTargetAssignmentId, courseId: selectedGcCourseId })
+        body: JSON.stringify({
+          assignmentId: publishTargetAssignmentId,
+          courseId: selectedGcCourseId,
+          state: publishAsDraft ? 'DRAFT' : 'PUBLISHED'
+        })
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -1619,6 +1624,22 @@ export default function TeacherDashboard() {
                     <p className="text-xs text-gray-500 mt-2">
                       This will create a new coursework assignment in Google Classroom.
                     </p>
+                    <div className="mt-4 flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        id="publishAsDraft"
+                        className="mt-1"
+                        checked={publishAsDraft}
+                        onChange={(e) => setPublishAsDraft(e.target.checked)}
+                        disabled={isPublishing}
+                      />
+                      <label htmlFor="publishAsDraft" className="text-sm text-gray-700">
+                        <strong>Publish as Draft (Recommended)</strong><br />
+                        <span className="text-xs text-gray-500">
+                          Creating the assignment as a draft allows you to safely add Google Docs and other attachments inside Google Classroom before assigning it to students. It also guarantees TitanGrade retains permission to push grades to it later.
+                        </span>
+                      </label>
+                    </div>
                   </div>
                 </>
               )}

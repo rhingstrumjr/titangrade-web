@@ -53,7 +53,9 @@ export async function GET(req: NextRequest) {
     });
 
     if (!fileRes.ok) {
-      throw new Error(`Failed to download file: ${fileRes.statusText}`);
+      const errorText = await fileRes.text();
+      console.error(`Drive fetch failed for ${fileId}. URL: ${downloadUrl}, Status: ${fileRes.status}, Body: ${errorText}`);
+      throw new Error(`Google Drive API Error (${fileRes.status}): ${errorText}`);
     }
 
     const arrayBuffer = await fileRes.arrayBuffer();

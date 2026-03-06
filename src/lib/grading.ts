@@ -3,6 +3,7 @@ import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { RubricCriterion } from '@/types/submission';
+import mammoth from 'mammoth';
 
 // Shared types
 export interface CategoryScore {
@@ -47,10 +48,22 @@ export interface AssignmentData {
 export async function fetchToBuffer(url: string) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch file at ${url}`);
-  return {
-    buffer: Buffer.from(await res.arrayBuffer()),
-    mimeType: res.headers.get('content-type') || 'application/pdf'
-  };
+
+  let mimeType = res.headers.get('content-type') || 'application/pdf';
+  let buffer = Buffer.from(await res.arrayBuffer());
+
+  // Auto-convert .docx to plain text since Gemini 2.5 flash does not support docx natively via API
+  if (mimeType.includes('officedocument.wordprocessingml.document') || mimeType.includes('docx') || url.toLowerCase().includes('.docx')) {
+    try {
+      const result = await mammoth.extractRawText({ buffer });
+      buffer = Buffer.from(result.value);
+      mimeType = 'text/plain';
+    } catch (e) {
+      console.error("Failed to parse docx with mammoth:", e);
+    }
+  }
+
+  return { buffer, mimeType };
 }
 
 /**

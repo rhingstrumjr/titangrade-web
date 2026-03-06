@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { assignmentId, courseId } = body;
+    const { assignmentId, courseId, state = 'PUBLISHED' } = body;
 
     if (!assignmentId || !courseId) {
       return NextResponse.json({ error: "assignmentId and courseId are required" }, { status: 400 });
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       description: `Graded with TitanGrade: \n\n${assignment.rubric || 'Please see TitanGrade for rubric details.'}`,
       maxPoints: assignment.max_score,
       workType: 'ASSIGNMENT',
-      state: 'PUBLISHED',
+      state: state, // 'DRAFT' or 'PUBLISHED'
     };
 
     // 3. Send to Google Classroom API

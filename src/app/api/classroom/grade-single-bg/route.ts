@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
 export async function POST(req: NextRequest) {
+  let currentSubmission: any = null;
+
   try {
     const authHeader = req.headers.get("authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -15,6 +17,8 @@ export async function POST(req: NextRequest) {
     if (!submission || !assignmentId) {
       return NextResponse.json({ error: "Missing data" }, { status: 400 });
     }
+
+    currentSubmission = submission;
 
     // Mark as grading
     await supabase.from('submissions').update({ status: 'grading' }).eq('id', submission.id);
@@ -72,12 +76,19 @@ export async function POST(req: NextRequest) {
 
   } catch (err: any) {
     console.error("Single BG Grading Error:", err);
-    // Attempt to write the error state
-    try {
-      const { submission } = await req.json().catch(() => ({ submission: null }));
-      // We already consumed req.json() so it might fail. Let's just use the outer destructured variable if it exists.
-      // Wait, we can't easily access `body` from outside the block if it's let defined inside try.
-    } catch { } // ignore
+
+    // Attempt to write the error state if we have the submission
+    if (currentSubmission && currentSubmission.id) {
+      try {
+        await supabase.from('submissions').update({
+          status: 'error',
+          feedback: `Internal Grading Error: ${err.message}`
+        }).eq('id', currentSubmission.id);
+      } catch (dbErr) {
+        console.error("Failed to mark submission as error in DB:", dbErr);
+      }
+    }
+
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
