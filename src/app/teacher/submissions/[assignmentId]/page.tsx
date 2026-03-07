@@ -107,7 +107,7 @@ export default function SubmissionsView() {
         const initialSelection = new Set<string>();
         sortedGroups.forEach(group => {
           const latest = group.submissions[group.submissions.length - 1];
-          if (latest.status === 'graded' && !latest.is_exemplar && !latest.manually_edited) {
+          if ((latest.status === 'graded' || latest.status === 'error') && !latest.is_exemplar && !latest.manually_edited) {
             initialSelection.add(latest.id);
           }
         });
@@ -176,7 +176,7 @@ export default function SubmissionsView() {
   // Count eligible submissions for regrade
   const regradeEligibleCount = studentGroups.reduce(
     (count, group) => count + group.submissions.filter(s =>
-      s.status === 'graded' && !s.is_exemplar && !s.manually_edited
+      (s.status === 'graded' || s.status === 'error') && !s.is_exemplar && !s.manually_edited
     ).length,
     0
   );
@@ -398,7 +398,7 @@ export default function SubmissionsView() {
     const allEligible = new Set<string>();
     studentGroups.forEach(group => {
       group.submissions.forEach(s => {
-        if (s.status === 'graded' && !s.is_exemplar && !s.manually_edited) {
+        if ((s.status === 'graded' || s.status === 'error') && !s.is_exemplar && !s.manually_edited) {
           allEligible.add(s.id);
         }
       });
@@ -410,7 +410,7 @@ export default function SubmissionsView() {
     const latestOnly = new Set<string>();
     studentGroups.forEach(group => {
       const latest = group.submissions[group.submissions.length - 1];
-      if (latest.status === 'graded' && !latest.is_exemplar && !latest.manually_edited) {
+      if ((latest.status === 'graded' || latest.status === 'error') && !latest.is_exemplar && !latest.manually_edited) {
         latestOnly.add(latest.id);
       }
     });
@@ -917,7 +917,7 @@ export default function SubmissionsView() {
                                     <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-4">
                                         {/* Regrade checkbox — only for eligible submissions */}
-                                        {sub.status === 'graded' && !sub.is_exemplar && !sub.manually_edited && (
+                                        {(sub.status === 'graded' || sub.status === 'error') && !sub.is_exemplar && !sub.manually_edited && (
                                           <input
                                             type="checkbox"
                                             checked={selectedForRegrade.has(sub.id)}

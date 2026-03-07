@@ -31,7 +31,7 @@ export async function POST(req: Request) {
       .from('submissions')
       .select('*')
       .eq('assignment_id', assignmentId)
-      .eq('status', 'graded')
+      .in('status', ['graded', 'error'])
       .eq('is_exemplar', false)
       .eq('manually_edited', false);
 
