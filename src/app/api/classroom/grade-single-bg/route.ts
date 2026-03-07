@@ -25,23 +25,33 @@ export async function POST(req: NextRequest) {
     // Mark as grading
     await supabase.from('submissions').update({ status: 'grading' }).eq('id', submission.id);
 
-    const fileId = submission.file_url.replace('drive:', '');
-    console.log(`Downloading file ${fileId} from Drive...`);
+    // 1. Determine which files to download
+    const gcFileIds: string[] = currentSubmission.gc_file_ids || [];
+    if (gcFileIds.length === 0 && currentSubmission.file_url?.startsWith('drive:')) {
+      gcFileIds.push(currentSubmission.file_url.replace('drive:', ''));
+    }
 
-    // 1. Download file directly via our lib (no internal fetch)
-    const { buffer, mimeType, filename } = await downloadDriveFile(fileId, providerToken);
-    console.log(`Download complete: ${filename} (${mimeType}), size: ${buffer.length} bytes`);
+    console.log(`Downloading ${gcFileIds.length} files from Drive...`);
+    const uploadedUrls: string[] = [];
 
-    // 2. Upload to Supabase Storage
-    const filePath = `${assignmentId}/${Date.now()}_${Math.random().toString(36).substring(7)}_${filename}`;
-    const { error: uploadError } = await supabase.storage.from('submissions').upload(filePath, buffer, { contentType: mimeType });
-    if (uploadError) throw new Error("Failed to upload to storage: " + uploadError.message);
+    for (const fileId of gcFileIds) {
+      console.log(`Downloading file ${fileId}...`);
+      const { buffer, mimeType, filename } = await downloadDriveFile(fileId, providerToken);
 
-    const { data: publicUrlData } = supabase.storage.from('submissions').getPublicUrl(filePath);
-    const finalUrl = publicUrlData.publicUrl;
+      const filePath = `${assignmentId}/${Date.now()}_${Math.random().toString(36).substring(7)}_${filename}`;
+      const { error: uploadError } = await supabase.storage.from('submissions').upload(filePath, buffer, { contentType: mimeType });
+      if (uploadError) throw new Error(`Failed to upload file ${filename}: ${uploadError.message}`);
 
-    // 3. Update DB record mapped to this file
-    await supabase.from('submissions').update({ file_url: finalUrl, file_urls: [finalUrl] }).eq('id', submission.id);
+      const { data: publicUrlData } = supabase.storage.from('submissions').getPublicUrl(filePath);
+      uploadedUrls.push(publicUrlData.publicUrl);
+    }
+
+    // 3. Update DB record with all files
+    const finalPrimaryUrl = uploadedUrls[0] || currentSubmission.file_url;
+    await supabase.from('submissions').update({
+      file_url: finalPrimaryUrl,
+      file_urls: uploadedUrls
+    }).eq('id', submission.id);
 
     // 4. Trigger grading API
     const host = req.headers.get("host") || "localhost:3000";

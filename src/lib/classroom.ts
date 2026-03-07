@@ -39,13 +39,16 @@ export async function syncClassroomSubmissions(
 
   // 3. Map to TitanGrade format
   const submissionsToUpsert = gcSubmissions.map((sub: any) => {
-    let driveFileId = "";
+    const gcFileIds: string[] = [];
     if (sub.assignmentSubmission && sub.assignmentSubmission.attachments) {
-      const attachment = sub.assignmentSubmission.attachments.find((a: any) => a.driveFile);
-      if (attachment) {
-        driveFileId = attachment.driveFile.id;
-      }
+      sub.assignmentSubmission.attachments.forEach((a: any) => {
+        if (a.driveFile) {
+          gcFileIds.push(a.driveFile.id);
+        }
+      });
     }
+
+    const driveFileId = gcFileIds[0] || "";
 
     const studentInfo = studentsMap[sub.userId] || { name: "Unknown Student", email: "" };
 
@@ -56,6 +59,7 @@ export async function syncClassroomSubmissions(
       status: "pending", // Default to pending so teacher can "Grade All"
       gc_submission_id: sub.id,
       file_url: driveFileId ? `drive:${driveFileId}` : "",
+      gc_file_ids: gcFileIds,
     };
   });
 
