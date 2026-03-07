@@ -96,6 +96,7 @@ export async function syncClassroomSubmissions(
         !newIds.every((id: string, i: number) => id === oldIds[i]);
 
       if (needsRefresh) {
+        console.log(`Refreshing ${s.student_name}: ${oldIds.length} -> ${newIds.length} files`);
         updatesNeeded.push(
           supabase.from('submissions')
             .update({
@@ -117,7 +118,9 @@ export async function syncClassroomSubmissions(
   }
 
   if (updatesNeeded.length > 0) {
-    await Promise.all(updatesNeeded);
+    const results = await Promise.all(updatesNeeded);
+    const errors = results.filter(r => r.error);
+    if (errors.length > 0) console.error("Sync update errors:", errors);
   }
 
   return { count: newsOnly.length, totalFetched: submissionsToUpsert.length, updatedCount: updatesNeeded.length };

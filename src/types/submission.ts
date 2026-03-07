@@ -29,6 +29,8 @@ export interface Submission {
   student_name: string;
   student_email: string;
   file_url: string;
+  file_urls?: string[];
+  gc_file_ids?: string[];
   score: string | null;
   feedback: string | null;
   status: string;

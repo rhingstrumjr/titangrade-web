@@ -22,6 +22,18 @@ export async function POST(req: NextRequest) {
     currentSubmission = submission;
     console.log(`Starting background grade for submission ${submission.id} (student: ${submission.student_name})`);
 
+    // Fetch LATEST data from DB to ensure we have all gc_file_ids from recent syncs
+    const { data: latestSub, error: fetchErr } = await supabase
+      .from('submissions')
+      .select('*')
+      .eq('id', submission.id)
+      .single();
+
+    if (fetchErr || !latestSub) {
+      throw new Error(`Could not find latest submission record: ${fetchErr?.message}`);
+    }
+    currentSubmission = latestSub;
+
     // Mark as grading
     await supabase.from('submissions').update({ status: 'grading' }).eq('id', submission.id);
 
@@ -48,10 +60,14 @@ export async function POST(req: NextRequest) {
 
     // 3. Update DB record with all files
     const finalPrimaryUrl = uploadedUrls[0] || currentSubmission.file_url;
-    await supabase.from('submissions').update({
+    console.log(`Updating DB for ${currentSubmission.student_name}: file_url=${finalPrimaryUrl}, file_urls_count=${uploadedUrls.length}`);
+
+    const { error: urlUpdateError } = await supabase.from('submissions').update({
       file_url: finalPrimaryUrl,
       file_urls: uploadedUrls
-    }).eq('id', submission.id);
+    }).eq('id', currentSubmission.id);
+
+    if (urlUpdateError) throw new Error(`Failed to update submission URLs: ${urlUpdateError.message}`);
 
     // 4. Trigger grading API
     const host = req.headers.get("host") || "localhost:3000";
@@ -60,17 +76,16 @@ export async function POST(req: NextRequest) {
     const gradeRes = await fetch(`${protocol}://${host}/api/grade`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ submissionId: submission.id, sendEmail: false })
+      body: JSON.stringify({ submissionId: currentSubmission.id, sendEmail: false })
     });
 
     if (!gradeRes.ok) {
       const errData = await gradeRes.json();
-      await supabase.from('submissions').update({ status: 'error', feedback: errData.error }).eq('id', submission.id);
+      await supabase.from('submissions').update({ status: 'error', feedback: errData.error }).eq('id', currentSubmission.id);
       return NextResponse.json({ error: errData.error }, { status: 500 });
     }
 
     const gradedData = await gradeRes.json();
-
     return NextResponse.json({ success: true, score: gradedData.score });
 
   } catch (err: any) {

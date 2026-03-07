@@ -494,8 +494,8 @@ export default function SubmissionsView() {
     setRegradeProgress(null);
   };
 
-  // Google Classroom Batch Grader - include 'error' to allow retrying failed imports
-  const pendingGcSubmissions = studentGroups.flatMap(g => g.submissions).filter(s => (s.status === 'pending' || s.status === 'error') && s.file_url?.startsWith('drive:'));
+  // Google Classroom Batch Grader - any submission with a 'drive:' url needs importing
+  const pendingGcSubmissions = studentGroups.flatMap(g => g.submissions).filter(s => s.file_url?.startsWith('drive:'));
 
   const handleGradeGcSubmissions = async () => {
     if (pendingGcSubmissions.length === 0) return;
@@ -557,6 +557,48 @@ export default function SubmissionsView() {
     }
 
     setIsGradingGc(false);
+  };
+
+  const handleGradeSingle = async (submission: Submission) => {
+    setIsGradingGc(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const providerToken = session?.provider_token;
+    if (!providerToken) {
+      alert("Google Classroom authentication expired. Please reconnect.");
+      setIsGradingGc(false);
+      return;
+    }
+
+    // Set local state to grading
+    setStudentGroups(prevGroups => prevGroups.map(group => {
+      if (group.email === submission.student_email) {
+        const updatedSubmissions = group.submissions.map(s =>
+          s.id === submission.id ? { ...s, status: 'grading' as any } : s
+        );
+        return { ...group, submissions: updatedSubmissions, latestStatus: 'grading' as any };
+      }
+      return group;
+    }));
+
+    try {
+      const res = await fetch('/api/classroom/grade-single-bg', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${providerToken}`
+        },
+        body: JSON.stringify({ submission, assignmentId })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`Grade failed: ${err.error || "Unknown error"}`);
+      }
+    } catch (e: any) {
+      alert(`Error: ${e.message}`);
+    } finally {
+      setIsGradingGc(false);
+    }
   };
 
   // Check auto-start on mount (could be passed via query string)
@@ -998,9 +1040,35 @@ export default function SubmissionsView() {
 
                                         <div className="flex flex-col gap-2 relative z-10">
                                           {sub.file_url?.startsWith('drive:') ? (
-                                            <button disabled className="flex items-center justify-center gap-1.5 text-gray-400 cursor-not-allowed bg-gray-50 border border-gray-100 px-3 py-1.5 rounded-md font-medium text-xs">
-                                              <FileText size={14} /> Pending Import
+                                            <button
+                                              disabled={isGradingGc}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleGradeSingle(sub);
+                                              }}
+                                              className="flex items-center justify-center gap-1.5 text-indigo-600 hover:text-indigo-800 transition-colors bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-md font-medium text-xs shadow-sm"
+                                            >
+                                              {isGradingGc ? (
+                                                <Loader2 size={14} className="animate-spin" />
+                                              ) : (
+                                                <Download size={14} />
+                                              )}
+                                              Pending Import
                                             </button>
+                                          ) : sub.file_urls && sub.file_urls.length > 1 ? (
+                                            <div className="flex flex-wrap gap-1">
+                                              {sub.file_urls.map((url, idx) => (
+                                                <a
+                                                  key={idx}
+                                                  href={url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="flex items-center justify-center gap-1 text-indigo-600 hover:text-indigo-800 transition-colors bg-indigo-50 border border-indigo-100 px-2 py-1 rounded-md font-medium text-[10px]"
+                                                >
+                                                  <FileText size={10} /> Doc {idx + 1}
+                                                </a>
+                                              ))}
+                                            </div>
                                           ) : (
                                             <a href={sub.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 text-indigo-600 hover:text-indigo-800 transition-colors bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-md font-medium text-xs">
                                               <FileText size={14} /> View Document
