@@ -63,6 +63,12 @@ export async function fetchToBuffer(url: string) {
     }
   }
 
+  // Prevent AI SDK from throwing "The messages do not match the ModelMessage[] schema" due to empty base64 data
+  if (buffer.length === 0) {
+    buffer = Buffer.from('[This file appears to be completely empty or contains no extractable text]');
+    mimeType = 'text/plain';
+  }
+
   return { buffer, mimeType };
 }
 
