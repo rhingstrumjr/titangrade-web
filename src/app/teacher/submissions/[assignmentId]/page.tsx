@@ -117,7 +117,7 @@ export default function SubmissionsView() {
 
       // Subscribe to real-time changes
       const channel = supabase
-        .channel('submissions_changes')
+        .channel(`assignment_${assignmentId}_changes`)
         .on(
           'postgres_changes',
           {
@@ -138,11 +138,29 @@ export default function SubmissionsView() {
                   ...group,
                   submissions: updatedSubmissions,
                   latestStatus: updatedSub.status,
-                  latestScore: updatedSub.score || group.latestScore
+                  latestScore: updatedSub.score !== null ? updatedSub.score : group.latestScore
                 };
               }
               return group;
             }));
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'assignments',
+            filter: `id=eq.${assignmentId}`
+          },
+          (payload) => {
+            if (!payload || !payload.new) return;
+            const newA = payload.new as any;
+            if (newA.title !== undefined) setAssignmentTitle(newA.title);
+            if (newA.ai_cost !== undefined) setAssignmentCost(Number(newA.ai_cost) || 0);
+            if (newA.max_attempts !== undefined) setMaxAttempts(newA.max_attempts);
+            if (newA.gc_course_id !== undefined) setGcCourseId(newA.gc_course_id);
+            if (newA.gc_coursework_id !== undefined) setGcCourseworkId(newA.gc_coursework_id);
           }
         )
         .subscribe();
