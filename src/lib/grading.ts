@@ -266,7 +266,7 @@ export async function gradeSubmission(
   const studentFileParts = studentFiles.map(sf => ({
     type: 'file' as const,
     data: sf.buffer.toString('base64'),
-    mimeType: sf.mimeType,
+    mediaType: sf.mimeType,
   }));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -285,7 +285,7 @@ export async function gradeSubmission(
     const rubricFileParts = rubricFiles.map(rf => ({
       type: 'file' as const,
       data: rf!.buffer.toString('base64'),
-      mimeType: rf!.mimeType,
+      mediaType: rf!.mimeType,
     }));
 
     aiMessages.push({
@@ -303,7 +303,7 @@ export async function gradeSubmission(
     const execFileParts = execFiles.map(ef => ({
       type: 'file' as const,
       data: ef.buffer.toString('base64'),
-      mimeType: ef.mimeType,
+      mediaType: ef.mimeType,
     }));
 
     aiMessages.push({
@@ -340,7 +340,7 @@ export async function gradeSubmission(
           role: 'user',
           content: [
             { type: 'text', text: `TEACHER APPROVED STUDENT EXEMPLAR:\nThe following attached document is a past student submission that the teacher explicitly marked as a grading exemplar.\nThe teacher gave this submission a SCORE of: ${ex.score}\nThe teacher gave this submission FEEDBACK of: "${ex.feedback}"\n${categoryCalibration}\nCALIBRATION INSTRUCTIONS:\n1. Note which rubric categories the teacher was strict vs lenient on.\n2. Note the point deductions: what errors cost how many points?\n3. Note the feedback style: how direct? How encouraging? How specific?\n4. Apply these SAME deduction patterns, strictness levels, and tone when grading the current student's work.` },
-            { type: 'file' as const, data: exFile.buffer.toString('base64'), mimeType: exFile.mimeType },
+            { type: 'file' as const, data: exFile.buffer.toString('base64'), mediaType: exFile.mimeType },
           ]
         });
       } catch (e) {
