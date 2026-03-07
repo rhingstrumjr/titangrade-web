@@ -580,8 +580,11 @@ export default function SubmissionsView() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Sync failed");
 
-      if (data.newSubmissionsCount > 0) {
-        alert(`Successfully synced! Added ${data.newSubmissionsCount} new student submission(s).`);
+      if (data.newSubmissionsCount > 0 || data.updatedCount > 0) {
+        let msg = "Successfully synced!";
+        if (data.newSubmissionsCount > 0) msg += ` Added ${data.newSubmissionsCount} new student submission(s).`;
+        if (data.updatedCount > 0) msg += ` Refreshed ${data.updatedCount} existing submission(s) with new attachments.`;
+        alert(msg);
         window.location.reload();
       } else {
         alert("Already up to date with Google Classroom.");

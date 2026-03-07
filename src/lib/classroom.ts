@@ -91,7 +91,13 @@ export async function syncClassroomSubmissions(
       if (changed) {
         updatesNeeded.push(
           supabase.from('submissions')
-            .update({ gc_file_ids: newIds, file_url: s.file_url }) // Refresh the "drive:" url too
+            .update({
+              gc_file_ids: newIds,
+              file_url: s.file_url, // contains 'drive:...'
+              status: 'pending',
+              score: null,
+              feedback: 'Sync detected new/changed file attachments. Ready for import.'
+            })
             .eq('id', existing.id)
         );
       }

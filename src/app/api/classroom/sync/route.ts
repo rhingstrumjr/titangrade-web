@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       newSubmissionsCount: result.count,
+      updatedCount: result.updatedCount,
       totalFetched: result.totalFetched
     });
 
