@@ -86,9 +86,16 @@ export async function syncClassroomSubmissions(
       // Check if file list changed
       const oldIds = existing.gc_file_ids || [];
       const newIds = s.gc_file_ids || [];
-      const changed = oldIds.length !== newIds.length || !newIds.every((id: string, i: number) => id === oldIds[i]);
 
-      if (changed) {
+      // TRIGGER REFRESH IF:
+      // 1. Old list is empty (legacy data)
+      // 2. Length differs
+      // 3. Any ID differs
+      const needsRefresh = oldIds.length === 0 ||
+        oldIds.length !== newIds.length ||
+        !newIds.every((id: string, i: number) => id === oldIds[i]);
+
+      if (needsRefresh) {
         updatesNeeded.push(
           supabase.from('submissions')
             .update({
