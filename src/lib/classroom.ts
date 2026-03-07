@@ -65,26 +65,49 @@ export async function syncClassroomSubmissions(
 
   if (submissionsToUpsert.length === 0) return { count: 0 };
 
-  // 4. Upsert into DB. Use gc_submission_id + assignment_id as the conflict target if possible, 
-  // but TitanGrade might not have a unique constraint on those yet.
-  // For now, we'll do a manual check or just use 'onConflict' if the schema supports it.
-
-  // Let's assume we want to avoid duplicates. We'll fetch existing gc_submission_ids for this assignment.
+  // 4. Update or Insert submissions. 
+  // We want to make sure existing submissions get their gc_file_ids refreshed 
+  // if more files were added in Classroom.
   const { data: existingSubs } = await supabase
     .from('submissions')
-    .select('gc_submission_id')
+    .select('id, gc_submission_id, gc_file_ids')
     .eq('assignment_id', assignmentId);
 
-  const existingIds = new Set((existingSubs || []).map(s => s.gc_submission_id));
+  const existingMap = new Map((existingSubs || []).map(s => [s.gc_submission_id, s]));
 
-  const newsOnly = submissionsToUpsert.filter((s: any) => !existingIds.has(s.gc_submission_id));
+  const newsOnly = [];
+  const updatesNeeded = [];
+
+  for (const s of submissionsToUpsert) {
+    const existing = existingMap.get(s.gc_submission_id);
+    if (!existing) {
+      newsOnly.push(s);
+    } else {
+      // Check if file list changed
+      const oldIds = existing.gc_file_ids || [];
+      const newIds = s.gc_file_ids || [];
+      const changed = oldIds.length !== newIds.length || !newIds.every((id: string, i: number) => id === oldIds[i]);
+
+      if (changed) {
+        updatesNeeded.push(
+          supabase.from('submissions')
+            .update({ gc_file_ids: newIds, file_url: s.file_url }) // Refresh the "drive:" url too
+            .eq('id', existing.id)
+        );
+      }
+    }
+  }
 
   if (newsOnly.length > 0) {
     const { error: insertErr } = await supabase.from('submissions').insert(newsOnly);
     if (insertErr) throw insertErr;
   }
 
-  return { count: newsOnly.length, totalFetched: submissionsToUpsert.length };
+  if (updatesNeeded.length > 0) {
+    await Promise.all(updatesNeeded);
+  }
+
+  return { count: newsOnly.length, totalFetched: submissionsToUpsert.length, updatedCount: updatesNeeded.length };
 }
 
 /**
