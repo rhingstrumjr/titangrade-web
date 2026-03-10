@@ -10,6 +10,14 @@ TitanGrade is a Next.js web application designed to help teachers grade student 
 - **Dashboard & CSV Export**: Track grading progress and export final student grades to a CSV file.
 
 ## Recent Updates
+- **Unified Assignment Page**: The assignment settings and submissions view are now combined into a single `/teacher/assignments/[id]` page. Teachers can edit rubrics, framework, toggles, and view submissions without navigating between pages.
+- **Prominent Class Tabs**: Class navigation redesigned with larger tabs, bottom-border active indicator, assignment count badges per class, and a roster icon for quick access to student management.
+- **Clickable Assignment Names**: Clicking an assignment title on the dashboard now navigates directly to the unified assignment page.
+- **Decluttered Submissions Toolbar**: Primary actions (Release Grades, Grade All) stay visible; secondary actions (Regrade, Sync, Push Grades, CSV, Analytics) are grouped under an "Actions" dropdown.
+- **Top-Level Regrade Checkboxes**: Regrade selection checkboxes are now visible at the table row level — no need to expand a student's submission history to select them.
+- **Google Classroom Submission Status**: The sync now captures whether students have turned in work. New status badges: "Not Submitted" (gray) and "Ready for Feedback" (amber) complement the existing "Graded" (green) and "Error" (red).
+- **Auto-Sync on Page Load**: GC-linked assignments automatically sync from Google Classroom when opened, showing fresh submission statuses.
+- **Auto-Redirect After Publish**: Publishing to Google Classroom now redirects to the unified assignment page, eliminating the manual import step.
 - **Google Classroom Integration**: Teachers can now import class rosters and assignments directly from Google Classroom.
 - **Google Drive Export Support**: Background conversion seamlessly exports student Google Docs, Sheets, and Slides submissions into PDFs for AI grading.
 - **Real-time Grading View**: The submissions dashboard now updates student scores dynamically in real-time as the AI API finishes grading each individual paper.
