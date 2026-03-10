@@ -200,7 +200,7 @@ export default function TeacherDashboard() {
     if (existing) {
       alert("This assignment is already imported. Redirecting to submissions...");
       setIsImportModalOpen(false);
-      window.location.href = `/teacher/submissions/${existing.id}`;
+      window.location.href = `/teacher/assignments/${existing.id}`;
       return;
     }
 
@@ -249,7 +249,7 @@ export default function TeacherDashboard() {
       }
 
       // 4. Redirect to Submissions page
-      window.location.href = `/teacher/submissions/${newAssignment.id}`;
+      window.location.href = `/teacher/assignments/${newAssignment.id}`;
 
     } catch (err: any) {
       console.error(err);
@@ -1337,7 +1337,7 @@ export default function TeacherDashboard() {
                   </div>
 
                   <div className="bg-gray-50 border-t border-gray-200 p-4 flex justify-between items-center">
-                    <Link href={`/teacher/submissions/${assignment.id}`} className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800">
+                    <Link href={`/teacher/assignments/${assignment.id}`} className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800">
                       <Users size={16} className="mr-1.5" />
                       View Submissions
                     </Link>

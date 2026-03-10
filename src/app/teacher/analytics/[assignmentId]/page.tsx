@@ -70,7 +70,7 @@ export default function AnalyticsPage() {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="max-w-5xl mx-auto">
-          <Link href={`/teacher/submissions/${assignmentId}`} className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 mb-6 text-sm font-medium">
+          <Link href={`/teacher/assignments/${assignmentId}`} className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 mb-6 text-sm font-medium">
             <ArrowLeft size={16} /> Back to Submissions
           </Link>
           <div className="bg-white border border-gray-200 rounded-xl p-12 text-center shadow-sm">
@@ -109,7 +109,7 @@ export default function AnalyticsPage() {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="max-w-5xl mx-auto">
-          <Link href={`/teacher/submissions/${assignmentId}`} className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 mb-6 text-sm font-medium">
+          <Link href={`/teacher/assignments/${assignmentId}`} className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 mb-6 text-sm font-medium">
             <ArrowLeft size={16} /> Back to Submissions
           </Link>
           <div className="bg-white border border-gray-200 rounded-xl p-12 text-center shadow-sm">
@@ -312,7 +312,7 @@ export default function AnalyticsPage() {
       <div className="max-w-5xl mx-auto space-y-8">
         {/* Header */}
         <div>
-          <Link href={`/teacher/submissions/${assignmentId}`} className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 mb-4 text-sm font-medium">
+          <Link href={`/teacher/assignments/${assignmentId}`} className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 mb-4 text-sm font-medium">
             <ArrowLeft size={16} /> Back to Submissions
           </Link>
           <div className="flex items-center gap-3 mb-1">
