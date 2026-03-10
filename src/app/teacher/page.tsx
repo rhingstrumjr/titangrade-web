@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon, Pencil, XCircle, Sparkles, Loader2, Copy } from "lucide-react";
+import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon, XCircle, Sparkles, Loader2, Copy } from "lucide-react";
 
 const supabase = createClient();
 
@@ -15,6 +15,7 @@ interface Class {
   id: string;
   name: string;
   created_at: string;
+  gc_course_id?: string | null;
 }
 
 interface RosterStudent {
@@ -65,6 +66,8 @@ export default function TeacherDashboard() {
   const [publishAsDraft, setPublishAsDraft] = useState(true);
   const [publishTargetAssignmentId, setPublishTargetAssignmentId] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isSyncingClasses, setIsSyncingClasses] = useState(false);
+  const [selectedPublishCourseIds, setSelectedPublishCourseIds] = useState<string[]>([]);
 
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -217,7 +220,26 @@ export default function TeacherDashboard() {
 
       if (data.error) throw new Error(data.error);
 
-      // 2. Create Assignment in DB
+      // 2. Auto-match GC course to TG class, or create one
+      let matchedClassId: string | null = null;
+      const matchedClass = classes.find(c => c.gc_course_id === selectedGcCourseId);
+      if (matchedClass) {
+        matchedClassId = matchedClass.id;
+      } else {
+        // Find the GC course name and auto-create a TG class
+        const gcCourse = gcCourses.find((c: any) => c.id === selectedGcCourseId);
+        const courseName = gcCourse?.name || "Imported Class";
+        const { data: newClass, error: classErr } = await supabase.from('classes').insert([{
+          name: courseName,
+          gc_course_id: selectedGcCourseId,
+        }]).select().single();
+        if (!classErr && newClass) {
+          matchedClassId = newClass.id;
+          setClasses(prev => [...prev, newClass]);
+        }
+      }
+
+      // 3. Create Assignment in DB
       let rubricText = data.assignment.description || "Edit assignment to add a detailed rubric.";
 
       const { data: newAssignment, error: assignError } = await supabase.from('assignments').insert([{
@@ -226,14 +248,14 @@ export default function TeacherDashboard() {
         rubric: rubricText,
         grading_framework: "standard",
         max_attempts: 1,
-        class_id: selectedClassId || null,
+        class_id: matchedClassId,
         gc_course_id: selectedGcCourseId,
         gc_coursework_id: selectedGcAssignmentId
       }]).select().single();
 
       if (assignError) throw assignError;
 
-      // 3. Insert Submissions in DB as 'pending'
+      // 4. Insert Submissions in DB as 'pending'
       const submissionsToInsert = data.submissions.map((sub: any) => ({
         assignment_id: newAssignment.id,
         student_name: sub.studentName,
@@ -248,7 +270,7 @@ export default function TeacherDashboard() {
         if (subErr) throw subErr;
       }
 
-      // 4. Redirect to Submissions page
+      // 5. Redirect to Submissions page
       window.location.href = `/teacher/assignments/${newAssignment.id}`;
 
     } catch (err: any) {
@@ -263,6 +285,7 @@ export default function TeacherDashboard() {
   const handleOpenPublishModal = async (assignmentId: string) => {
     setPublishTargetAssignmentId(assignmentId);
     setSelectedGcCourseId("");
+    setSelectedPublishCourseIds([]);
     setIsPublishModalOpen(true);
     if (gcCourses.length === 0 && providerToken) {
       setIsFetchingGc(true);
@@ -279,28 +302,90 @@ export default function TeacherDashboard() {
       }
       setIsFetchingGc(false);
     }
+    // Auto-select the linked course if the assignment's class has one
+    const assignment = assignments.find(a => a.id === assignmentId);
+    if (assignment?.class_id) {
+      const cls = classes.find(c => c.id === assignment.class_id);
+      if (cls?.gc_course_id) {
+        setSelectedPublishCourseIds([cls.gc_course_id]);
+      }
+    }
   };
 
   const executePublishToGc = async () => {
-    if (!publishTargetAssignmentId || !selectedGcCourseId || !providerToken) return;
+    if (!publishTargetAssignmentId || !providerToken) return;
+    const courseIds = selectedPublishCourseIds.length > 0 ? selectedPublishCourseIds : (selectedGcCourseId ? [selectedGcCourseId] : []);
+    if (courseIds.length === 0) return;
     setIsPublishing(true);
     try {
-      const res = await fetch("/api/classroom/create-coursework", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${providerToken}` },
-        body: JSON.stringify({
-          assignmentId: publishTargetAssignmentId,
-          courseId: selectedGcCourseId,
-          state: publishAsDraft ? 'DRAFT' : 'PUBLISHED'
-        })
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      const sourceAssignment = assignments.find(a => a.id === publishTargetAssignmentId);
+      if (!sourceAssignment) throw new Error("Assignment not found");
+
+      for (let i = 0; i < courseIds.length; i++) {
+        const courseId = courseIds[i];
+        let targetAssignmentId = publishTargetAssignmentId;
+
+        // For multi-class publish: duplicate the assignment for each additional class
+        if (i > 0) {
+          // Find or create the TG class for this GC course
+          let matchedClass = classes.find(c => c.gc_course_id === courseId);
+          if (!matchedClass) {
+            const gcCourse = gcCourses.find((c: any) => c.id === courseId);
+            const { data: newClass } = await supabase.from('classes').insert([{
+              name: gcCourse?.name || "Synced Class",
+              gc_course_id: courseId,
+            }]).select().single();
+            if (newClass) {
+              matchedClass = newClass;
+              setClasses(prev => [...prev, newClass]);
+            }
+          }
+
+          // Duplicate the assignment for this class
+          const { data: dupAssignment, error: dupError } = await supabase.from('assignments').insert([{
+            title: sourceAssignment.title,
+            max_score: sourceAssignment.max_score,
+            rubric: sourceAssignment.rubric,
+            rubrics: sourceAssignment.rubrics,
+            structured_rubric: sourceAssignment.structured_rubric,
+            exemplar_url: sourceAssignment.exemplar_url,
+            exemplar_urls: sourceAssignment.exemplar_urls,
+            grading_framework: sourceAssignment.grading_framework,
+            max_attempts: sourceAssignment.max_attempts,
+            is_socratic: sourceAssignment.is_socratic,
+            auto_send_emails: sourceAssignment.auto_send_emails,
+            generated_key: sourceAssignment.generated_key,
+            class_id: matchedClass?.id || null,
+          }]).select().single();
+          if (dupError) throw dupError;
+          targetAssignmentId = dupAssignment.id;
+          setAssignments(prev => [dupAssignment, ...prev]);
+        } else {
+          // For the first course, also update the assignment's class_id if a linked class exists
+          const matchedClass = classes.find(c => c.gc_course_id === courseId);
+          if (matchedClass && sourceAssignment.class_id !== matchedClass.id) {
+            await supabase.from('assignments').update({ class_id: matchedClass.id }).eq('id', targetAssignmentId);
+          }
+        }
+
+        // Publish to Google Classroom
+        const res = await fetch("/api/classroom/create-coursework", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${providerToken}` },
+          body: JSON.stringify({
+            assignmentId: targetAssignmentId,
+            courseId: courseId,
+            state: publishAsDraft ? 'DRAFT' : 'PUBLISHED'
+          })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+      }
 
       // Successfully published — redirect to unified assignment page
       setIsPublishModalOpen(false);
       window.location.href = `/teacher/assignments/${publishTargetAssignmentId}`;
-      return; // prevent further execution
+      return;
     } catch (err: any) {
       console.error(err);
       alert("Error publishing to Google Classroom: " + err.message);
@@ -752,6 +837,27 @@ export default function TeacherDashboard() {
   const displayedAssignments = selectedClassId
     ? assignments.filter(a => a.class_id === selectedClassId)
     : assignments;
+
+  const handleSyncClasses = async () => {
+    if (!providerToken) return;
+    setIsSyncingClasses(true);
+    try {
+      const res = await fetch("/api/classroom/sync-classes", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${providerToken}` }
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert("Error syncing classes: " + data.error);
+      } else {
+        alert(data.message);
+        fetchClasses(); // Refresh class list
+      }
+    } catch (err: any) {
+      alert("Error syncing classes: " + err.message);
+    }
+    setIsSyncingClasses(false);
+  };
 
   const copyToClipboard = (id: string) => {
     if (typeof window !== "undefined") {
@@ -1231,6 +1337,24 @@ export default function TeacherDashboard() {
               >
                 <PlusCircle size={16} /> Add Class
               </button>
+              {googleConnected && (
+                <button
+                  onClick={handleSyncClasses}
+                  disabled={isSyncingClasses}
+                  className="px-4 py-3 text-base font-semibold whitespace-nowrap text-emerald-500 hover:text-emerald-700 border-b-2 border-transparent hover:border-emerald-300 transition-all flex items-center gap-1 disabled:opacity-50"
+                  title="Create TitanGrade classes matching your Google Classroom courses"
+                >
+                  {isSyncingClasses ? <Loader2 size={16} className="animate-spin" /> : (
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                    </svg>
+                  )}
+                  Sync Google Classes
+                </button>
+              )}
             </div>
           </div>
 
@@ -1280,16 +1404,6 @@ export default function TeacherDashboard() {
                         {assignment.title}
                       </Link>
                       <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleEditAssignment(assignment);
-                          }}
-                          className="text-gray-400 hover:text-indigo-600 transition-colors p-1.5 rounded-md hover:bg-indigo-50 focus:outline-none"
-                          title="Edit Assignment"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
                         <button
                           onClick={(e) => {
                             e.preventDefault();
@@ -1623,21 +1737,44 @@ export default function TeacherDashboard() {
               ) : (
                 <>
                   <div>
-                    <label className="block text-sm font-semibold mb-2 text-gray-700">Select Google Classroom Course</label>
-                    <select
-                      className="w-full border border-gray-300 rounded-md p-2.5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
-                      value={selectedGcCourseId}
-                      onChange={(e) => setSelectedGcCourseId(e.target.value)}
-                      disabled={isPublishing}
-                    >
-                      <option value="">-- Choose a Class --</option>
-                      {gcCourses.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-gray-500 mt-2">
-                      This will create a new coursework assignment in Google Classroom.
+                    <label className="block text-sm font-semibold mb-2 text-gray-700">Select Google Classroom Course(s)</label>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Select one or more courses. Publishing to multiple courses will create a copy of the assignment for each class.
                     </p>
+                    <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                      {gcCourses.map(c => {
+                        const isChecked = selectedPublishCourseIds.includes(c.id);
+                        const linkedClass = classes.find(cls => cls.gc_course_id === c.id);
+                        return (
+                          <label key={c.id} className={`flex items-center px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${isChecked ? 'bg-emerald-50' : ''}`}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                setSelectedPublishCourseIds(prev =>
+                                  prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
+                                );
+                              }}
+                              disabled={isPublishing}
+                              className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded mr-3"
+                            />
+                            <div>
+                              <span className="text-sm font-medium text-gray-900">{c.name}</span>
+                              {linkedClass && (
+                                <span className="ml-2 text-xs text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                  Linked to: {linkedClass.name}
+                                </span>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {selectedPublishCourseIds.length > 1 && (
+                      <p className="text-xs text-amber-600 mt-2 font-medium">
+                        📋 Publishing to {selectedPublishCourseIds.length} courses will create {selectedPublishCourseIds.length - 1} additional copy(ies) of this assignment.
+                      </p>
+                    )}
                     <div className="mt-4 flex items-start gap-2">
                       <input
                         type="checkbox"
@@ -1650,7 +1787,7 @@ export default function TeacherDashboard() {
                       <label htmlFor="publishAsDraft" className="text-sm text-gray-700">
                         <strong>Publish as Draft (Recommended)</strong><br />
                         <span className="text-xs text-gray-500">
-                          Creating the assignment as a draft allows you to safely add Google Docs and other attachments inside Google Classroom before assigning it to students. It also guarantees TitanGrade retains permission to push grades to it later.
+                          Creating the assignment as a draft allows you to safely add Google Docs and other attachments inside Google Classroom before assigning it to students.
                         </span>
                       </label>
                     </div>
@@ -1669,7 +1806,7 @@ export default function TeacherDashboard() {
               </button>
               <button
                 onClick={executePublishToGc}
-                disabled={!selectedGcCourseId || isPublishing}
+                disabled={(selectedPublishCourseIds.length === 0 && !selectedGcCourseId) || isPublishing}
                 className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:opacity-50 flex items-center shadow-sm"
               >
                 {isPublishing ? (

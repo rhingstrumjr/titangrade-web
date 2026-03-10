@@ -1,0 +1,36 @@
+# Antigravity Ignore
+# Prevents the agent from indexing unnecessary or large files.
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+
+# Build outputs
+.next/
+out/
+build/
+dist/
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# Logs and temporary files
+*.log
+out.txt
+lint_*.txt
+*.tmp
+
+# Environment and Secrets
+.env*
+*.pem
+*.key
+
+# Large metadata / Locks
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Version Control
+.git/
+.vercel/
