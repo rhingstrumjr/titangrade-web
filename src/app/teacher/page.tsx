@@ -297,11 +297,10 @@ export default function TeacherDashboard() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
-      // Successfully published. Refresh assignments.
-      await fetchAssignments();
+      // Successfully published — redirect to unified assignment page
       setIsPublishModalOpen(false);
-      setPublishTargetAssignmentId(null);
-      alert("Successfully published assignment to Google Classroom!");
+      window.location.href = `/teacher/assignments/${publishTargetAssignmentId}`;
+      return; // prevent further execution
     } catch (err: any) {
       console.error(err);
       alert("Error publishing to Google Classroom: " + err.message);
@@ -1195,29 +1194,44 @@ export default function TeacherDashboard() {
         {/* Class Navigation & Assignment List */}
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex bg-gray-100 p-1 rounded-lg overflow-x-auto border border-gray-200">
+            <div className="flex items-center border-b border-gray-200 overflow-x-auto gap-0">
               <button
                 onClick={() => setSelectedClassId(null)}
-                className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors ${selectedClassId === null ? "bg-white shadow-sm text-indigo-700" : "text-gray-600 hover:text-gray-900"}`}
+                className={`px-5 py-3 text-base font-semibold whitespace-nowrap transition-all border-b-2 ${selectedClassId === null ? "border-indigo-600 text-indigo-700 bg-indigo-50/50" : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"}`}
               >
                 All Classes
+                <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700">{assignments.length}</span>
               </button>
-              {classes.map(cls => (
-                <button
-                  key={cls.id}
-                  onClick={() => setSelectedClassId(cls.id)}
-                  className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors ${selectedClassId === cls.id ? "bg-white shadow-sm text-indigo-700" : "text-gray-600 hover:text-gray-900"}`}
-                >
-                  {cls.name}
-                </button>
-              ))}
+              {classes.map(cls => {
+                const count = assignments.filter(a => a.class_id === cls.id).length;
+                return (
+                  <div key={cls.id} className="flex items-center">
+                    <button
+                      onClick={() => setSelectedClassId(cls.id)}
+                      className={`px-5 py-3 text-base font-semibold whitespace-nowrap transition-all border-b-2 ${selectedClassId === cls.id ? "border-indigo-600 text-indigo-700 bg-indigo-50/50" : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"}`}
+                    >
+                      {cls.name}
+                      <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700">{count}</span>
+                    </button>
+                    {selectedClassId === cls.id && (
+                      <button
+                        onClick={() => handleOpenRoster(cls.id)}
+                        className="ml-1 p-1.5 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-100 rounded-md transition-colors"
+                        title="Manage Roster"
+                      >
+                        <Users size={16} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              <button
+                onClick={() => setIsCreatingClass(!isCreatingClass)}
+                className="px-4 py-3 text-base font-semibold whitespace-nowrap text-indigo-500 hover:text-indigo-700 border-b-2 border-transparent hover:border-indigo-300 transition-all flex items-center gap-1"
+              >
+                <PlusCircle size={16} /> Add Class
+              </button>
             </div>
-            <button
-              onClick={() => setIsCreatingClass(!isCreatingClass)}
-              className="text-sm flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-medium whitespace-nowrap bg-indigo-50 px-3 py-1.5 rounded-full"
-            >
-              <PlusCircle size={16} /> Add Class
-            </button>
           </div>
 
           {isCreatingClass && (
@@ -1237,19 +1251,9 @@ export default function TeacherDashboard() {
           )}
 
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h2 className="text-xl font-bold">
-                {selectedClassId ? classes.find(c => c.id === selectedClassId)?.name : "All Assignments"}
-              </h2>
-              {selectedClassId && (
-                <button
-                  onClick={() => handleOpenRoster(selectedClassId)}
-                  className="text-sm border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-md font-medium transition-colors flex items-center gap-1.5"
-                >
-                  <Users size={16} /> Manage Roster
-                </button>
-              )}
-            </div>
+            <h2 className="text-xl font-bold">
+              {selectedClassId ? classes.find(c => c.id === selectedClassId)?.name : "All Assignments"}
+            </h2>
           </div>
 
           {loading ? (
@@ -1272,9 +1276,9 @@ export default function TeacherDashboard() {
                 <div key={assignment.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
                   <div className="p-6 flex-grow">
                     <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-lg font-bold text-gray-900 truncate pr-2" title={assignment.title}>
+                      <Link href={`/teacher/assignments/${assignment.id}`} className="text-lg font-bold text-gray-900 truncate pr-2 hover:text-indigo-700 hover:underline transition-colors cursor-pointer" title={assignment.title}>
                         {assignment.title}
-                      </h3>
+                      </Link>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button
                           onClick={(e) => {

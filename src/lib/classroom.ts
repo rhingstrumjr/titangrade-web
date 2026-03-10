@@ -52,12 +52,21 @@ export async function syncClassroomSubmissions(
 
     const studentInfo = studentsMap[sub.userId] || { name: "Unknown Student", email: "" };
 
+    // Determine status based on GC state and file attachments
+    const gcState = sub.state || "CREATED"; // NEW, CREATED, TURNED_IN, RETURNED, RECLAIMED_BY_STUDENT
+    const hasTurnedIn = gcState === "TURNED_IN" || gcState === "RETURNED";
+    const hasFiles = gcFileIds.length > 0;
+    // Students who turned in AND have files → ready for grading (pending)
+    // Students who haven't turned in or have no files → awaiting submission
+    const status = (hasTurnedIn && hasFiles) ? "pending" : "awaiting_submission";
+
     return {
       assignment_id: assignmentId,
       student_name: studentInfo.name,
       student_email: studentInfo.email,
-      status: "pending", // Default to pending so teacher can "Grade All"
+      status,
       gc_submission_id: sub.id,
+      gc_state: gcState,
       file_url: driveFileId ? `drive:${driveFileId}` : "",
       gc_file_ids: gcFileIds,
     };
@@ -70,7 +79,7 @@ export async function syncClassroomSubmissions(
   // if more files were added in Classroom.
   const { data: existingSubs } = await supabase
     .from('submissions')
-    .select('id, gc_submission_id, gc_file_ids')
+    .select('id, gc_submission_id, gc_file_ids, gc_state, status')
     .eq('assignment_id', assignmentId);
 
   const existingMap = new Map((existingSubs || []).map(s => [s.gc_submission_id, s]));
@@ -83,30 +92,43 @@ export async function syncClassroomSubmissions(
     if (!existing) {
       newsOnly.push(s);
     } else {
-      // Check if file list changed
+      // Check if file list or GC state changed
       const oldIds = existing.gc_file_ids || [];
       const newIds = s.gc_file_ids || [];
+      const stateChanged = existing.gc_state !== s.gc_state;
 
       // TRIGGER REFRESH IF:
       // 1. Old list is empty (legacy data)
       // 2. Length differs
       // 3. Any ID differs
-      const needsRefresh = oldIds.length === 0 ||
+      // 4. GC submission state changed (e.g. NEW → TURNED_IN)
+      const needsFileRefresh = oldIds.length === 0 ||
         oldIds.length !== newIds.length ||
         !newIds.every((id: string, i: number) => id === oldIds[i]);
 
-      if (needsRefresh) {
+      if (needsFileRefresh) {
         console.log(`Refreshing ${s.student_name}: ${oldIds.length} -> ${newIds.length} files`);
         updatesNeeded.push(
           supabase.from('submissions')
             .update({
               gc_file_ids: newIds,
-              file_url: s.file_url, // contains 'drive:...'
-              status: 'pending',
+              file_url: s.file_url,
+              status: s.status,
+              gc_state: s.gc_state,
               score: null,
               feedback: 'Sync detected new/changed file attachments. Ready for import.'
             })
             .eq('id', existing.id)
+        );
+      } else if (stateChanged) {
+        // Only state changed (student turned in but no new files, or reclaimed)
+        // Only update if the submission hasn't been graded yet
+        const updatePayload: Record<string, any> = { gc_state: s.gc_state };
+        if (existing.status === 'awaiting_submission' || existing.status === 'pending') {
+          updatePayload.status = s.status;
+        }
+        updatesNeeded.push(
+          supabase.from('submissions').update(updatePayload).eq('id', existing.id)
         );
       }
     }

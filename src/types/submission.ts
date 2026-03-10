@@ -45,6 +45,7 @@ export interface Submission {
   reasoning?: string[];
   ai_cost?: number;
   gc_submission_id?: string;
+  gc_state?: string;
   created_at: string;
 }
 
