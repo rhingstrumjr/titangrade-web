@@ -289,8 +289,8 @@ export default function AssignmentView() {
     setRegradeProgress(null);
   };
 
-  // Google Classroom handlers
-  const pendingGcSubmissions = studentGroups.flatMap(g => g.submissions).filter(s => s.file_url?.startsWith('drive:'));
+  // Google Classroom handlers — only count submissions that are "Ready for Feedback" (pending), not "Not Submitted"
+  const pendingGcSubmissions = studentGroups.flatMap(g => g.submissions).filter(s => s.file_url?.startsWith('drive:') && s.status !== 'awaiting_submission');
 
   const handleGradeGcSubmissions = async () => {
     if (pendingGcSubmissions.length === 0) return;
@@ -519,17 +519,18 @@ export default function AssignmentView() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {studentGroups.map((group) => {
                     const latest = group.submissions[group.submissions.length - 1];
-                    const isEligible = (latest.status === 'graded' || latest.status === 'error') && !latest.is_exemplar && !latest.manually_edited;
+                    const isRegradeEligible = (latest.status === 'graded' || latest.status === 'error') && !latest.is_exemplar && !latest.manually_edited;
+                    const isGradeEligible = latest.status === 'pending' && latest.file_url?.startsWith('drive:');
+                    const showCheckbox = isRegradeEligible || isGradeEligible;
 
                     return (
                       <React.Fragment key={group.email}>
                         {/* Top-level row — always visible */}
                         <tr className={`hover:bg-gray-50 transition-colors ${expandedEmail === group.email ? 'bg-indigo-50/50' : ''}`}>
-                          {/* Regrade checkbox — visible at top level */}
                           <td className="px-4 py-3">
-                            {isEligible && (
+                            {showCheckbox && (
                               <input type="checkbox" checked={selectedForRegrade.has(latest.id)} onChange={() => toggleRegradeSelection(latest.id)}
-                                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded cursor-pointer" title="Include in regrade" />
+                                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded cursor-pointer" title={isRegradeEligible ? "Include in regrade" : "Select for grading"} />
                             )}
                           </td>
                           {/* Student name - clickable to expand */}
