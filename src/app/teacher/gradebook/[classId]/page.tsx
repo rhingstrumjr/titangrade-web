@@ -326,17 +326,16 @@ export default function GradebookPage() {
                 const isSelected = selectedStudentIds.has(student.id);
                 return (
                   <tr key={student.id} className={`group transition-colors border-b border-gray-100 ${isSelected ? 'bg-indigo-50/50 hover:bg-indigo-50/80' : 'hover:bg-indigo-50/30'}`}>
-                    <td className={`p-3 sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] transition-colors flex items-center justify-between ${isSelected ? 'bg-indigo-50/80' : 'bg-white group-hover:bg-indigo-50/80'}`}>
-                      <div className="flex items-center gap-3">
+                    <td className={`py-1.5 px-3 sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] transition-colors ${isSelected ? 'bg-indigo-50/80' : 'bg-white group-hover:bg-indigo-50/80'}`}>
+                      <div className="flex items-center gap-2">
                         <input 
                           type="checkbox" 
-                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
                           checked={isSelected}
                           onChange={() => handleSelectRow(student.id)}
                         />
-                        <div>
-                          <div className="text-sm font-semibold text-gray-900 truncate max-w-[180px]" title={student.name}>{student.name}</div>
-                          <div className="text-xs text-gray-500 truncate max-w-[180px]" title={student.email}>{student.email}</div>
+                        <div className="text-sm font-medium text-gray-900 truncate max-w-[180px]" title={student.name}>
+                          {student.name}
                         </div>
                       </div>
                     </td>
@@ -355,7 +354,7 @@ export default function GradebookPage() {
                         >
                           <div 
                             className={`
-                              relative mx-auto w-12 h-8 flex items-center justify-center rounded-md font-medium text-sm transition-all
+                              relative mx-auto w-10 h-6 flex items-center justify-center rounded font-medium text-xs transition-all
                               ${sub ? 'cursor-pointer hover:scale-105 hover:shadow-md' : 'bg-gray-50 border border-gray-100 text-gray-300'}
                               ${hasScore ? getHeatmapColor(pct) : ''}
                             `}
