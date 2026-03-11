@@ -263,11 +263,11 @@ export default function GradebookPage() {
       <main className="flex-grow w-full overflow-x-auto relative">
         <div className="inline-block min-w-full bg-white relative">
           
-          <table className="w-full text-left border-collapse">
+          <table className="text-left border-collapse w-full">
             <thead className="sticky top-0 bg-white z-10 shadow-sm">
               {/* Topic Headers */}
               <tr>
-                <th className="bg-white border-b border-gray-200 z-20 sticky left-0 min-w-[280px] p-4 text-sm font-semibold text-gray-600 shadow-[1px_0_0_0_#e5e7eb]">
+                <th className="bg-white border-b border-gray-200 z-20 sticky left-0 w-[240px] min-w-[240px] p-4 text-sm font-semibold text-gray-600 shadow-[1px_0_0_0_#e5e7eb]">
                   <div className="flex items-center gap-3">
                     <input 
                       type="checkbox" 
@@ -288,7 +288,8 @@ export default function GradebookPage() {
                     {group.topic}
                   </th>
                 ))}
-                <th className="bg-white border-b border-gray-200 min-w-[80px] p-4"></th>
+                <th className="bg-white border-b border-gray-200 w-24 p-4"></th>
+                <th className="bg-white border-b border-gray-200 w-full p-4"></th>
               </tr>
               
               {/* Assignment Tilted Headers */}
@@ -299,7 +300,7 @@ export default function GradebookPage() {
                 {assignmentGroups.flatMap(group => group.assignments.map((a: any) => (
                   <th 
                     key={a.id} 
-                    className="border-b border-l border-gray-200 h-32 align-bottom p-2 relative group hover:bg-gray-50 transition-colors"
+                    className="border-b border-l border-gray-200 h-32 align-bottom p-2 w-16 min-w-[64px] relative group hover:bg-gray-50 transition-colors"
                   >
                     <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-6 shrink-0 origin-bottom-left -rotate-45">
                       <a 
@@ -312,9 +313,10 @@ export default function GradebookPage() {
                     </div>
                   </th>
                 )))}
-                <th className="bg-white border-b border-l border-gray-200 p-2 align-bottom text-xs font-semibold text-gray-500 text-center">
+                <th className="bg-white border-b border-l border-gray-200 p-2 w-24 align-bottom text-xs font-semibold text-gray-500 text-center">
                   Trend
                 </th>
+                <th className="bg-white border-b border-gray-200 w-full"></th>
               </tr>
             </thead>
             
@@ -387,9 +389,10 @@ export default function GradebookPage() {
                     }))}
 
                     {/* Sparkline Column */}
-                    <td className="border-l border-gray-100 p-2 flex items-center justify-center h-full min-h-[50px]">
+                    <td className="border-l border-gray-100 p-2 w-24 flex items-center justify-center h-full min-h-[50px]">
                       {renderSparkline(sparklinePoints)}
                     </td>
+                    <td className="w-full"></td>
                   </tr>
                 );
               })}
