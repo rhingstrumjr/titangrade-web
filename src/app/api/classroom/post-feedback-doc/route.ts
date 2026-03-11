@@ -68,22 +68,28 @@ export async function POST(req: NextRequest) {
     console.log(`[post-feedback-doc] alreadyReleasedSubmissionIds =`, Array.from(alreadyReleasedSubmissionIds));
 
     let count = 0;
+    const debugInfo: any = {
+      totalGradedFromDb: submissions.length,
+      alreadyReleasedCount: alreadyReleasedSubmissionIds.size,
+      alreadyReleasedIds: Array.from(alreadyReleasedSubmissionIds),
+      skippedReasons: []
+    };
     // Iterate over our graded submissions
     for (const sub of submissions) {
       console.log(`[post-feedback-doc] Checking sub ${sub.id} (gc_id: ${sub.gc_submission_id})`);
       if (!sub.gc_submission_id) {
-        console.log(`[post-feedback-doc] Skipping ${sub.student_name}: no gc_submission_id`);
+        debugInfo.skippedReasons.push(`${sub.student_name}: no gc_submission_id`);
         continue;
       }
       
       // Skip if already released
       if (alreadyReleasedSubmissionIds.has(sub.gc_submission_id)) {
-        console.log(`[post-feedback-doc] Skipping ${sub.student_name}: already released`);
+        debugInfo.skippedReasons.push(`${sub.student_name}: already released`);
         continue;
       }
 
       if (!sub.feedback) {
-        console.log(`[post-feedback-doc] Skipping ${sub.student_name}: no feedback text`);
+        debugInfo.skippedReasons.push(`${sub.student_name}: no feedback text`);
         continue;
       }
 
@@ -102,7 +108,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, count });
+    return NextResponse.json({ success: true, count, debug: debugInfo });
   } catch (error: any) {
     console.error("Manual Feedback Release Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

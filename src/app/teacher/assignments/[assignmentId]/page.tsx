@@ -411,7 +411,11 @@ export default function AssignmentView() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to release feedback");
-      alert(`Successfully generated and attached feedback to ${data.count} student(s) in Google Classroom!`);
+      if (data.count === 0 && data.debug?.skippedReasons?.length) {
+        alert(`0 students were updated.\n\nReasons:\n${data.debug.skippedReasons.join('\n')}`);
+      } else {
+        alert(`Successfully generated and attached feedback to ${data.count} student(s) in Google Classroom!`);
+      }
     } catch (err: any) { alert(`Release Error: ${err.message}`); }
     setReleasingFeedback(false);
   };
