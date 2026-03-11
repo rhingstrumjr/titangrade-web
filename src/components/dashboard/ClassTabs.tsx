@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Users, PlusCircle, Archive, Loader2 } from "lucide-react";
+import { Users, PlusCircle, Archive, Loader2, Table } from "lucide-react";
 import type { Class, Assignment } from "@/types/dashboard";
 
 interface ClassTabsProps {
@@ -67,13 +67,22 @@ export const ClassTabs: React.FC<ClassTabsProps> = ({
                   <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700">{count}</span>
                 </button>
                 {selectedClassId === cls.id && (
-                  <button
-                    onClick={() => onManageRoster(cls.id)}
-                    className="ml-1 p-1.5 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-100 rounded-md transition-colors"
-                    title="Manage Roster"
-                  >
-                    <Users size={16} />
-                  </button>
+                  <>
+                    <button
+                      onClick={() => onManageRoster(cls.id)}
+                      className="ml-1 p-1.5 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-100 rounded-md transition-colors"
+                      title="Manage Roster"
+                    >
+                      <Users size={16} />
+                    </button>
+                    <a
+                      href={`/teacher/gradebook/${cls.id}`}
+                      className="ml-1 p-1.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-100 rounded-md transition-colors block"
+                      title="Open Gradebook"
+                    >
+                      <Table size={16} />
+                    </a>
+                  </>
                 )}
               </div>
             );

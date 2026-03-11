@@ -79,6 +79,8 @@ export async function fetchToBuffer(url: string) {
 export async function gradeSubmission(
   fileUrls: string[],
   assignment: AssignmentData,
+  studentEmail?: string,
+  attemptNumber: number = 1
 ): Promise<GradeResult> {
   const { rubric, rubrics, max_score, title, grading_framework, exemplar_url, exemplar_urls, is_socratic, generated_key, structured_rubric } = assignment;
 
@@ -112,6 +114,19 @@ export async function gradeSubmission(
     .select('*')
     .eq('assignment_id', assignment.id)
     .eq('is_exemplar', true);
+
+  // Fetch Student Profile for Interests Analogies
+  let studentInterests: string[] = [];
+  if (studentEmail) {
+    const { data: profile } = await supabase
+      .from('student_profiles')
+      .select('interests')
+      .eq('user_id', studentEmail)
+      .single();
+    if (profile?.interests) {
+      studentInterests = profile.interests;
+    }
+  }
 
   let frameworkInstructions = "";
   if (grading_framework === 'marzano') {
@@ -185,15 +200,37 @@ export async function gradeSubmission(
     `;
   }
 
-  const socraticInstructions = is_socratic ? `
+  let socraticInstructions = '';
+  if (is_socratic) {
+    let baseSocratic = `
   🚨 CRITICAL SOCRATIC TUTOR DIRECTIVE 🚨
   The teacher has enabled Socratic Tutor Mode. YOU MUST NEVER REVEAL THE CORRECT ANSWER DIRECTLY if the student got it wrong.
   If the student got the question wrong, instead of stating the correct answer or explicitly correcting them, you must ask a guiding question, point out a logical flaw, or refer them back to a specific concept to help them realize their own mistake. 
   Your feedback must act like a 1-on-1 tutor guiding them to the 'aha' moment. Focus heavily on 'What did they confuse?' and 'How can I gently nudge them?'
-  It is entirely okay to tell the student if they got the question correct.
-  ` : `
+  It is entirely okay to tell the student if they got the question correct.`;
+
+    if (attemptNumber === 1) {
+      baseSocratic += `\n  ATTEMPT 1: Give light nudges and ask a single guiding question per mistake. Do not be overly specific.`;
+    } else if (attemptNumber === 2) {
+      baseSocratic += `\n  ATTEMPT 2: Give more direct hints and point out exactly where their reasoning failed, but STILL do not fully reveal the answer.`;
+    } else if (attemptNumber >= 3) {
+      baseSocratic += `\n  ATTEMPT ${attemptNumber}: You may now walk them through the solution step-by-step or reveal the answer and explicitly explain why, as they are struggling after multiple attempts.`;
+    }
+    
+    socraticInstructions = baseSocratic;
+  } else {
+    socraticInstructions = `
   If the student got the question correct, celebrate it. If the student got the question wrong, you may explicitly reveal the correct answer and explain why it is correct.
   `;
+  }
+
+  let analogiesInstructions = '';
+  if (studentInterests.length > 0) {
+    analogiesInstructions = `
+  STUDENT INTERESTS: The student is interested in: ${studentInterests.join(', ')}. 
+  If you are explaining a complex science concept in your Feedback, try to use exactly ONE brief analogy related to these interests to help it stick. Do not force it if it doesn't make sense.
+    `;
+  }
 
   // Build rubric text for system prompt
   let rubricTextBlock: string;
@@ -260,6 +297,7 @@ export async function gradeSubmission(
   - If comparing to an Exemplar, do a direct matching: Student Answer vs Exemplar Answer.
   - Quote the exact text the student wrote when evaluating their reasoning.
   ${socraticInstructions}
+  ${analogiesInstructions}
   ${answerKeyInstructions}`;
 
   // Build AI message context

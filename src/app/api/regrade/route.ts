@@ -61,7 +61,12 @@ export async function POST(req: Request) {
           : [sub.file_url];
 
         // Grade using the shared module (picks up current exemplars automatically)
-        const result = await gradeSubmission(activeFileUrls, assignment);
+        const result = await gradeSubmission(
+          activeFileUrls, 
+          assignment,
+          sub.student_email,
+          sub.attempt_number || 1
+        );
 
         // Store the old score/feedback before overwriting
         const oldScore = sub.score || '';

@@ -28,6 +28,9 @@ export interface Assignment {
   grading_framework: "standard" | "marzano";
   max_attempts: number;
   is_socratic: boolean;
+  topic?: string | null;
+  remediation_threshold?: number | null;
+  enrichment_threshold?: number | null;
   auto_send_emails: boolean;
   class_id?: string | null;
   gc_course_id?: string | null;

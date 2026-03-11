@@ -441,12 +441,52 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
             </div>
           )}
 
-          {/* Struggling Students */}
+          {/* AI-Suggested Small Groups */}
+          {troubleSpots.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h2 className="text-md font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <Users size={18} className="text-indigo-600" />
+                AI-Suggested Small Groups
+              </h2>
+              <div className="space-y-4">
+                {troubleSpots.map((ts, i) => {
+                  const groupStudents = latestSubs.filter(sub => {
+                    if (isMarzano && sub.skill_assessments) {
+                      const sa = sub.skill_assessments.find((s: any) => `[${s.level}] ${s.dimension}: ${s.skill}` === ts.criterion);
+                      return sa && sa.status !== "not_assessed" && sa.status !== "demonstrated";
+                    } else if (!isMarzano && sub.category_scores) {
+                      const cs = sub.category_scores.find((c: any) => c.category === ts.criterion);
+                      return cs && cs.possible > 0 && (cs.earned / cs.possible) < 0.6;
+                    }
+                    return false;
+                  });
+                  if (groupStudents.length === 0) return null;
+                  return (
+                    <div key={i} className="border border-indigo-100 rounded-lg p-3 bg-indigo-50/30">
+                      <div className="flex items-start justify-between mb-2">
+                        <h3 className="text-xs font-bold text-indigo-900 leading-snug pr-4">{ts.criterion}</h3>
+                        <span className="shrink-0 bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full font-semibold">{groupStudents.length} Students</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {groupStudents.map(s => (
+                          <span key={s.id} className="text-[10px] bg-white border border-gray-200 text-gray-700 px-2 py-1 rounded truncate max-w-[120px]" title={s.student_name}>
+                            {s.student_name.split(' ')[0]}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Struggling Students Overall */}
           {strugglingStudents.length > 0 && (
             <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
               <h2 className="text-md font-bold text-gray-900 mb-3 flex items-center gap-2">
                 <Users size={18} className="text-orange-500" />
-                Struggling ({strugglingStudents.length})
+                Overall Struggling ({strugglingStudents.length})
               </h2>
               <div className="space-y-2">
                 {strugglingStudents.map(s => {

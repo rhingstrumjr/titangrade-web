@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Settings, Save, Loader2, Sparkles } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { RubricBuilder } from "@/components/RubricBuilder";
@@ -27,6 +27,26 @@ export function AssignmentSettings({ assignment, onUpdate }: AssignmentSettingsP
     assignment.feedback_release_mode || "immediate"
   );
   const [maxAttempts, setMaxAttempts] = useState(assignment.max_attempts?.toString() || "1");
+  const [topic, setTopic] = useState(assignment.topic || "");
+  const [remediationThreshold, setRemediationThreshold] = useState(assignment.remediation_threshold?.toString() || "");
+  const [enrichmentThreshold, setEnrichmentThreshold] = useState(assignment.enrichment_threshold?.toString() || "");
+  const [existingTopics, setExistingTopics] = useState<string[]>([]);
+  const [isCreatingTopic, setIsCreatingTopic] = useState(false);
+
+  useEffect(() => {
+    async function fetchTopics() {
+      const { data } = await supabase
+        .from("assignments")
+        .select("topic")
+        .not("topic", "is", null)
+        .order("topic");
+      if (data) {
+        const topics = Array.from(new Set(data.map((d: any) => d.topic).filter(Boolean))) as string[];
+        setExistingTopics(topics);
+      }
+    }
+    fetchTopics();
+  }, []);
 
   // ── Rubric ──
   const existingRubricIsFile = assignment.rubric && assignment.rubric.startsWith("http");
@@ -192,6 +212,9 @@ export function AssignmentSettings({ assignment, onUpdate }: AssignmentSettingsP
         max_score: finalScore,
         grading_framework: framework,
         is_socratic: isSocratic,
+        topic: topic || null,
+        remediation_threshold: remediationThreshold ? parseInt(remediationThreshold) : null,
+        enrichment_threshold: enrichmentThreshold ? parseInt(enrichmentThreshold) : null,
         feedback_release_mode: feedbackReleaseMode,
         max_attempts: maxAttempts ? parseInt(maxAttempts) : null,
         exemplar_url: finalExemplarValue,
@@ -292,7 +315,83 @@ export function AssignmentSettings({ assignment, onUpdate }: AssignmentSettingsP
           </div>
         </div>
 
-        {/* ── Row 3: Toggles ── */}
+        {/* ── Row 3: Topic & Thresholds ── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
+              Topic / Unit
+            </label>
+            {isCreatingTopic ? (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  placeholder="New Topic Name"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingTopic(false)}
+                  className="text-xs text-gray-500 hover:text-gray-700 underline shrink-0"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <select
+                value={topic}
+                onChange={(e) => {
+                  if (e.target.value === "CREATE_NEW") {
+                    setIsCreatingTopic(true);
+                    setTopic("");
+                  } else {
+                    setTopic(e.target.value);
+                  }
+                }}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+              >
+                <option value="">No Topic (Ungrouped)</option>
+                {existingTopics.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+                <option value="CREATE_NEW" className="font-semibold text-indigo-600">
+                  + Create New Topic...
+                </option>
+              </select>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
+              Remediation Threshold
+            </label>
+            <input
+              type="number"
+              value={remediationThreshold}
+              onChange={(e) => setRemediationThreshold(e.target.value)}
+              placeholder="e.g. 70"
+              min={0}
+              max={100}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
+              Enrichment Threshold
+            </label>
+            <input
+              type="number"
+              value={enrichmentThreshold}
+              onChange={(e) => setEnrichmentThreshold(e.target.value)}
+              placeholder="e.g. 90"
+              min={0}
+              max={100}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* ── Row 4: Toggles ── */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center p-4 bg-indigo-50 border border-indigo-100 rounded-lg">
             <input

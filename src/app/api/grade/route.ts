@@ -43,7 +43,12 @@ export async function POST(req: Request) {
     const activeFileUrls = file_urls && file_urls.length > 0 ? file_urls : [file_url];
 
     // 2. Call shared grading logic
-    const result = await gradeSubmission(activeFileUrls, assignment);
+    const result = await gradeSubmission(
+      activeFileUrls, 
+      assignment,
+      student_email,
+      submission.attempt_number || 1
+    );
 
     // Default to true if clientSendEmail is not provided
     const shouldSendEmail = assignment.auto_send_emails !== false && (clientSendEmail !== false);

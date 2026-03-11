@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS assignments (
   max_score INTEGER NOT NULL,
   rubric TEXT NOT NULL,
   grading_framework TEXT DEFAULT 'standard',
+  topic TEXT,
+  remediation_threshold INTEGER,
+  enrichment_threshold INTEGER,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -20,5 +23,12 @@ CREATE TABLE IF NOT EXISTS submissions (
   status TEXT DEFAULT 'pending', -- pending, graded, error
   score TEXT, -- e.g., "85/100" or "3.5/4.0"
   feedback TEXT, -- AI generated feedback
+  attempt_number INTEGER DEFAULT 1,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 3. Create Student Profiles Table
+CREATE TABLE IF NOT EXISTS student_profiles (
+  user_id TEXT PRIMARY KEY,
+  interests TEXT[]
 );
