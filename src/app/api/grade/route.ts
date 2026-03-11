@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { gradeSubmission, fetchToBuffer } from '@/lib/grading';
+import { attachFeedbackDocToSubmission } from '@/lib/classroom';
 import { buildBreakdownHtml } from '@/lib/email-helpers';
 import { Resend } from 'resend';
 
@@ -12,6 +13,16 @@ export async function POST(req: Request) {
 
     if (!submissionId) {
       return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
+    }
+
+    let providerToken = null;
+    const authHeader = req.headers.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      providerToken = authHeader.split(" ")[1];
+    } else {
+      const { cookies } = await import("next/headers");
+      const cookieStore = await cookies();
+      providerToken = cookieStore.get("provider_token")?.value || null;
     }
 
     // 1. Fetch submission details
@@ -56,8 +67,31 @@ export async function POST(req: Request) {
     if (updateError) {
       console.error('Failed to update submission status:', updateError);
     }
+    
+    // 4. Generate and attach Feedback Doc if immediate mode and linked to GC
+    if (
+      assignment.feedback_release_mode === 'immediate' &&
+      assignment.gc_course_id &&
+      assignment.gc_coursework_id &&
+      submission.gc_submission_id &&
+      providerToken
+    ) {
+      try {
+        await attachFeedbackDocToSubmission(
+          assignment.gc_course_id,
+          assignment.gc_coursework_id,
+          submission.gc_submission_id,
+          student_name,
+          result.Feedback,
+          providerToken
+        );
+      } catch (attachErr) {
+        console.error("Failed to attach feedback doc to GC:", attachErr);
+        // We don't fail the whole grading response so the dashboard updates correctly
+      }
+    }
 
-    // 4. Send Email via Resend (if auto-send is enabled)
+    // 5. Send Email via Resend (if auto-send is enabled)
     if (shouldSendEmail) {
       try {
         const breakdownHtml = buildBreakdownHtml(result.CategoryScores, result.SkillAssessments);

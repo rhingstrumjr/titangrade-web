@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     // 2. Prepare Google Classroom CourseWork data
     const courseWorkData = {
       title: assignment.title,
-      description: `Graded with TitanGrade: \n\n${assignment.rubric || 'Please see TitanGrade for rubric details.'}`,
+      description: assignment.description || 'Graded with TitanGrade',
       maxPoints: assignment.max_score,
       workType: 'ASSIGNMENT',
       state: state, // 'DRAFT' or 'PUBLISHED'

@@ -16,13 +16,16 @@ interface AssignmentSettingsProps {
 export function AssignmentSettings({ assignment, onUpdate }: AssignmentSettingsProps) {
   // ── Basic settings ──
   const [title, setTitle] = useState(assignment.title || "");
+  const [description, setDescription] = useState(assignment.description || "");
   const [rubricText, setRubricText] = useState(
     assignment.rubric && !assignment.rubric.startsWith("http") ? assignment.rubric : ""
   );
   const [maxScore, setMaxScore] = useState(assignment.max_score?.toString() || "100");
   const [framework, setFramework] = useState(assignment.grading_framework || "standard");
   const [isSocratic, setIsSocratic] = useState(assignment.is_socratic || false);
-  const [autoSendEmails, setAutoSendEmails] = useState(assignment.auto_send_emails !== false);
+  const [feedbackReleaseMode, setFeedbackReleaseMode] = useState<"immediate" | "manual">(
+    assignment.feedback_release_mode || "immediate"
+  );
   const [maxAttempts, setMaxAttempts] = useState(assignment.max_attempts?.toString() || "1");
 
   // ── Rubric ──
@@ -182,13 +185,14 @@ export function AssignmentSettings({ assignment, onUpdate }: AssignmentSettingsP
       .from("assignments")
       .update({
         title,
+        description,
         rubric: finalRubricValue,
         rubrics: finalRubricsArray.length > 0 ? finalRubricsArray : null,
         structured_rubric: finalStructuredRubric,
         max_score: finalScore,
         grading_framework: framework,
         is_socratic: isSocratic,
-        auto_send_emails: autoSendEmails,
+        feedback_release_mode: feedbackReleaseMode,
         max_attempts: maxAttempts ? parseInt(maxAttempts) : null,
         exemplar_url: finalExemplarValue,
         exemplar_urls: finalExemplarArray,
@@ -245,6 +249,20 @@ export function AssignmentSettings({ assignment, onUpdate }: AssignmentSettingsP
           </div>
         </div>
 
+        {/* ── Row 1.5: Description ── */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
+            Description (Visible to Students)
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="Instructions or prompt for the student... (This will sync to Google Classroom)"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+          />
+        </div>
+
         {/* ── Row 2: Max Score + Max Attempts ── */}
         <div className="grid grid-cols-2 gap-4">
           {framework !== "marzano" && (
@@ -294,19 +312,21 @@ export function AssignmentSettings({ assignment, onUpdate }: AssignmentSettingsP
             </div>
           </div>
           <div className="flex items-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
-            <input
-              id="settings-auto-send-toggle"
-              type="checkbox"
-              checked={autoSendEmails}
-              onChange={(e) => setAutoSendEmails(e.target.checked)}
-              className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-            />
+            <select
+              id="settings-feedback-release"
+              value={feedbackReleaseMode}
+              onChange={(e) => setFeedbackReleaseMode(e.target.value as "immediate" | "manual")}
+              className="h-9 w-32 px-2 text-sm border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+            >
+              <option value="immediate">Immediate</option>
+              <option value="manual">Manual / Later</option>
+            </select>
             <div className="ml-3">
-              <label htmlFor="settings-auto-send-toggle" className="font-semibold text-gray-900 cursor-pointer text-sm">
-                Auto-Send Grade Emails
+              <label htmlFor="settings-feedback-release" className="font-semibold text-gray-900 cursor-pointer text-sm">
+                Feedback Release (Google Classroom)
               </label>
               <p className="text-xs text-gray-600 mt-0.5">
-                If enabled, students receive an email with their feedback as soon as the AI finishes grading.
+                Should students receive their feedback immediately when generated, or should it wait until you release it manually?
               </p>
             </div>
           </div>

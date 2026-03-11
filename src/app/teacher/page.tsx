@@ -169,10 +169,10 @@ export default function TeacherDashboard() {
   const handleCreateAssignment = async (title: string, classIds: string[]) => {
     const inserts = classIds.length > 0
       ? classIds.map(classId => ({
-          title, class_id: classId, grading_framework: 'standard', max_score: 100, max_attempts: 1, auto_send_emails: true, is_socratic: false
+          title, class_id: classId, grading_framework: 'standard', max_score: 100, max_attempts: 1, feedback_release_mode: 'immediate', is_socratic: false
         }))
       : [{
-          title, class_id: selectedClassId || null, grading_framework: 'standard', max_score: 100, max_attempts: 1, auto_send_emails: true, is_socratic: false
+          title, class_id: selectedClassId || null, grading_framework: 'standard', max_score: 100, max_attempts: 1, feedback_release_mode: 'immediate', is_socratic: false
         }];
 
     const { data, error } = await supabase.from('assignments').insert(inserts).select();
@@ -193,6 +193,7 @@ export default function TeacherDashboard() {
     const { data, error } = await supabase.from('assignments').insert([{
       title: source.title + " (Copy)",
       max_score: source.max_score,
+      description: source.description,
       rubric: source.rubric,
       rubrics: source.rubrics,
       structured_rubric: source.structured_rubric,
@@ -201,7 +202,7 @@ export default function TeacherDashboard() {
       grading_framework: source.grading_framework,
       max_attempts: source.max_attempts,
       is_socratic: source.is_socratic,
-      auto_send_emails: source.auto_send_emails,
+      feedback_release_mode: source.feedback_release_mode || 'immediate',
       generated_key: source.generated_key,
       class_id: source.class_id,
     }]).select().single();

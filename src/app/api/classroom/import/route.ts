@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       let driveFile = null;
       if (sub.assignmentSubmission && sub.assignmentSubmission.attachments) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const attachment = sub.assignmentSubmission.attachments.find((a: any) => a.driveFile);
+        const attachment = sub.assignmentSubmission.attachments.find((a: any) => a.driveFile && !a.driveFile.title?.startsWith("TitanGrade Feedback:"));
         if (attachment) {
           driveFile = {
             id: attachment.driveFile.id,

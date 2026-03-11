@@ -19,6 +19,8 @@ export interface Assignment {
   id: string;
   title: string;
   max_score: number;
+  description?: string;
+  feedback_release_mode?: "immediate" | "manual";
   rubric: string;
   rubrics?: string[];
   exemplar_url?: string;

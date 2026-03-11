@@ -12,6 +12,8 @@ interface ActionsDropdownProps {
   syncingFromGc?: boolean;
   onPushGradesToGc?: () => void;
   syncingToGc?: boolean;
+  onReleaseFeedback?: () => void;
+  releasingFeedback?: boolean;
   onDownloadCSV: () => void;
   hasStudents: boolean;
   isGcLinked: boolean;
@@ -21,6 +23,7 @@ interface ActionsDropdownProps {
 export function ActionsDropdown({
   assignmentId, onRegrade, regrading, selectedRegradeCount,
   onSyncFromClassroom, syncingFromGc, onPushGradesToGc, syncingToGc,
+  onReleaseFeedback, releasingFeedback,
   onDownloadCSV, hasStudents, isGcLinked, isGradingGc
 }: ActionsDropdownProps) {
   const [open, setOpen] = useState(false);
@@ -72,6 +75,16 @@ export function ActionsDropdown({
               {syncingToGc ? "Pushing..." : "Push Grades to Classroom"}
             </button>
           )}
+          {isGcLinked && hasStudents && onReleaseFeedback && (
+            <button
+              onClick={() => { onReleaseFeedback(); setOpen(false); }}
+              disabled={releasingFeedback || isGradingGc}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-amber-50 text-amber-700 disabled:opacity-40 flex items-center gap-2"
+            >
+              <SendIcon size={14} />
+              {releasingFeedback ? "Releasing Feedback Docs..." : "Release Feedback Docs to GC"}
+            </button>
+          )}
           <div className="border-t border-gray-100 my-1" />
           <button
             onClick={() => { onDownloadCSV(); setOpen(false); }}
@@ -80,13 +93,6 @@ export function ActionsDropdown({
           >
             <Download size={14} /> Export CSV
           </button>
-          <Link
-            href={`/teacher/analytics/${assignmentId}`}
-            className="block px-4 py-2.5 text-sm hover:bg-emerald-50 text-emerald-700 flex items-center gap-2"
-            onClick={() => setOpen(false)}
-          >
-            <BarChart3 size={14} /> Analytics
-          </Link>
         </div>
       )}
     </div>

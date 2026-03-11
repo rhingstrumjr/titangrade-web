@@ -75,7 +75,10 @@ export async function POST(req: NextRequest) {
 
     const gradeRes = await fetch(`${protocol}://${host}/api/grade`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${providerToken}`
+      },
       body: JSON.stringify({ submissionId: currentSubmission.id, sendEmail: false })
     });
 

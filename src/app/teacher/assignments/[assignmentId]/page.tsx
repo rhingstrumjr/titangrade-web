@@ -14,6 +14,7 @@ import { RegradeModal } from "@/components/submissions/RegradeModal";
 import { ScoreDiff } from "@/components/submissions/ScoreDiff";
 import { AssignmentSettings } from "@/components/assignments/AssignmentSettings";
 import { ActionsDropdown } from "@/components/assignments/ActionsDropdown";
+import { AnalyticsDrawer } from "@/components/assignments/AnalyticsDrawer";
 
 export default function AssignmentView() {
   const params = useParams();
@@ -50,6 +51,10 @@ export default function AssignmentView() {
   const [syncingToGc, setSyncingToGc] = useState(false);
   const [syncingFromGc, setSyncingFromGc] = useState(false);
   const [autoSynced, setAutoSynced] = useState(false);
+  const [releasingFeedback, setReleasingFeedback] = useState(false);
+  
+  // Analytics State
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
 
   // Helper to group submission data
   const groupSubmissions = (subData: Submission[]) => {
@@ -392,6 +397,25 @@ export default function AssignmentView() {
     setSyncingToGc(false);
   };
 
+  const handleReleaseFeedback = async () => {
+    if (!gcCourseId || !gcCourseworkId) return;
+    setReleasingFeedback(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const providerToken = session?.provider_token;
+    if (!providerToken) { alert("Google auth expired."); setReleasingFeedback(false); return; }
+    try {
+      const res = await fetch('/api/classroom/post-feedback-doc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${providerToken}` },
+        body: JSON.stringify({ assignmentId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to release feedback");
+      alert(`Successfully generated and attached feedback to ${data.count} student(s) in Google Classroom!`);
+    } catch (err: any) { alert(`Release Error: ${err.message}`); }
+    setReleasingFeedback(false);
+  };
+
   // ── Status badge helper ──
   const StatusBadge = ({ status, emailSent }: { status: string; emailSent?: boolean }) => {
     if (status === 'graded') return (
@@ -459,8 +483,15 @@ export default function AssignmentView() {
             </button>
           )}
 
-          {/* Secondary: Actions Dropdown */}
-          <ActionsDropdown
+          {/* Secondary: Actions Dropdown & Analytics */}
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={() => setIsAnalyticsOpen(true)}
+              className="flex items-center gap-2 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 px-3 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm"
+            >
+              <BarChart3 size={16} /> Analytics
+            </button>
+            <ActionsDropdown
             assignmentId={assignmentId}
             onRegrade={() => setShowRegradeConfirm(true)}
             regrading={regrading}
@@ -469,12 +500,23 @@ export default function AssignmentView() {
             syncingFromGc={syncingFromGc}
             onPushGradesToGc={handlePushGradesToGc}
             syncingToGc={syncingToGc}
+            onReleaseFeedback={handleReleaseFeedback}
+            releasingFeedback={releasingFeedback}
             onDownloadCSV={handleDownloadCSV}
             hasStudents={studentGroups.length > 0}
             isGcLinked={!!(gcCourseId && gcCourseworkId)}
             isGradingGc={isGradingGc}
           />
+          </div>
         </div>
+
+        {/* Analytics Drawer */}
+        <AnalyticsDrawer 
+          isOpen={isAnalyticsOpen} 
+          onClose={() => setIsAnalyticsOpen(false)} 
+          assignment={assignment} 
+          submissions={studentGroups.flatMap(g => g.submissions)} 
+        />
 
         {/* Regrade Modal */}
         <RegradeModal isOpen={showRegradeConfirm} onClose={() => setShowRegradeConfirm(false)} onRegrade={handleRegrade} regrading={regrading} selectedCount={selectedForRegrade.size} exemplarCount={exemplarCount} regradeEligibleCount={regradeEligibleCount} onSelectLatest={selectLatestForRegrade} onSelectAll={selectAllForRegrade} onClearSelection={() => setSelectedForRegrade(new Set())} />
