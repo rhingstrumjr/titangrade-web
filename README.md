@@ -10,20 +10,15 @@ TitanGrade is a Next.js web application designed to help teachers grade student 
 - **Dashboard & CSV Export**: Track grading progress and export final student grades to a CSV file.
 
 ## Recent Updates
-- **Unified Assignment Page**: The assignment settings and submissions view are now combined into a single `/teacher/assignments/[id]` page. Teachers can edit rubrics, framework, toggles, and view submissions without navigating between pages.
-- **Prominent Class Tabs**: Class navigation redesigned with larger tabs, bottom-border active indicator, assignment count badges per class, and a roster icon for quick access to student management.
-- **Clickable Assignment Names**: Clicking an assignment title on the dashboard now navigates directly to the unified assignment page.
-- **Decluttered Submissions Toolbar**: Primary actions (Release Grades, Grade All) stay visible; secondary actions (Regrade, Sync, Push Grades, CSV, Analytics) are grouped under an "Actions" dropdown.
-- **Top-Level Regrade Checkboxes**: Regrade selection checkboxes are now visible at the table row level — no need to expand a student's submission history to select them.
-- **Google Classroom Submission Status**: The sync now captures whether students have turned in work. New status badges: "Not Submitted" (gray) and "Ready for Feedback" (amber) complement the existing "Graded" (green) and "Error" (red).
-- **Auto-Sync on Page Load**: GC-linked assignments automatically sync from Google Classroom when opened, showing fresh submission statuses.
-- **Auto-Redirect After Publish**: Publishing to Google Classroom now redirects to the unified assignment page, eliminating the manual import step.
-- **Google Classroom Integration**: Teachers can now import class rosters and assignments directly from Google Classroom.
-- **Google Drive Export Support**: Background conversion seamlessly exports student Google Docs, Sheets, and Slides submissions into PDFs for AI grading.
-- **Real-time Grading View**: The submissions dashboard now updates student scores dynamically in real-time as the AI API finishes grading each individual paper.
-- **AI Grading Transparency**: A new expandable details section surfaces exactly how the AI graded a submission, showing the extracted text (OCR) and step-by-step reasoning logic.
-- **Assignment Duplication**: Teachers can now quickly clone existing assignments (including their complex structured rubrics, framework, and settings) with a single click on the dashboard via the new "Copy" icon.
+- **Unified Assignment Editing**: The assignment detail page now includes a full-featured editor. Teachers can build structured rubrics, auto-parse rubrics from files/text using AI, upload exemplars, and auto-generate answer keys from worksheets without leaving the page.
+- **Google Classroom Class Syncing**: New "Sync Google Classes" feature that auto-creates TitanGrade classes matching your Google Classroom courses, enabling structured management.
+- **Smart Import & Multi-Class Publish**:
+  - **Auto-Sort on Import**: Assignments imported from Google Classroom are now automatically assigned to the correct TitanGrade class based on the course ID.
+  - **Multi-Class Publish**: Teachers can now publish a single assignment to multiple Google Classroom courses at once. The system handles duplicating the assignment into the correct classes and linking them to GC coursework.
+- **Exemplars & Calibration**: Star previous graded assignments to use them as few-shot examples for the AI, teaching it your specific grading style and expectations.
 - **Consolidated UI**: The "Edit Grade" and "Edit Skills/Category Assessment" buttons have been merged into a single edit flow.
+- **Assignment Duplication**: Teachers can now quickly clone existing assignments (including their complex structured rubrics, framework, and settings) with a single click on the dashboard via the new "Copy" icon.
+- **Google Classroom Integration**: Improved linking between TitanGrade and Google Classroom, supporting auto-linking and improved sync states.
 - **Submissions View Refactor**: The complex Submission view has been broken down into smaller, maintainable React components (`CategoryBreakdown`, `RegradeModal`, `ScoreDiff`).
 - **Dynamic Skill Editing**: Instructors can edit specific skill dimensions (`Demonstrated`, `Partial`, `Not Demonstrated`, `Not Assessed`) inside the main editing pane.
 

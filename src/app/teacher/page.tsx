@@ -68,6 +68,7 @@ export default function TeacherDashboard() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [isSyncingClasses, setIsSyncingClasses] = useState(false);
   const [selectedPublishCourseIds, setSelectedPublishCourseIds] = useState<string[]>([]);
+  const [autoLoadMaterials, setAutoLoadMaterials] = useState(true);
 
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -242,10 +243,24 @@ export default function TeacherDashboard() {
       // 3. Create Assignment in DB
       let rubricText = data.assignment.description || "Edit assignment to add a detailed rubric.";
 
+      let exemplarUrl = null;
+      let exemplarUrls = null;
+      if (autoLoadMaterials && data.assignment.materials && data.assignment.materials.length > 0) {
+        const fileIds = data.assignment.materials
+          .map((m: any) => m.driveFile?.driveFile?.id)
+          .filter(Boolean);
+        if (fileIds.length > 0) {
+          exemplarUrls = fileIds.map((id: string) => `drive:${id}`);
+          exemplarUrl = exemplarUrls[0];
+        }
+      }
+
       const { data: newAssignment, error: assignError } = await supabase.from('assignments').insert([{
         title: data.assignment.title || "Imported Assignment",
         max_score: data.assignment.maxPoints || 100,
         rubric: rubricText,
+        exemplar_url: exemplarUrl,
+        exemplar_urls: exemplarUrls,
         grading_framework: "standard",
         max_attempts: 1,
         class_id: matchedClassId,
@@ -254,6 +269,29 @@ export default function TeacherDashboard() {
       }]).select().single();
 
       if (assignError) throw assignError;
+
+      // 3.5 Auto-load students into roster
+      if (data.students && data.students.length > 0 && matchedClassId) {
+        const { data: existingRoster } = await supabase
+          .from('roster_students')
+          .select('email')
+          .eq('class_id', matchedClassId);
+        
+        const existingEmails = new Set(existingRoster?.map(r => r.email) || []);
+        
+        const newStudents = data.students
+          .filter((s: any) => s.email && !existingEmails.has(s.email))
+          .map((s: any) => ({
+            class_id: matchedClassId,
+            name: s.name || "Unknown Student",
+            email: s.email
+          }));
+
+        if (newStudents.length > 0) {
+          const { error: rosterErr } = await supabase.from('roster_students').insert(newStudents);
+          if (rosterErr) console.error("Error auto-loading roster:", rosterErr);
+        }
+      }
 
       // 4. Insert Submissions in DB as 'pending'
       const submissionsToInsert = data.submissions.map((sub: any) => ({
@@ -1670,17 +1708,37 @@ export default function TeacherDashboard() {
                   )}
 
                   {selectedGcAssignmentId && (
-                    <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                      <div className="text-emerald-600 mt-0.5"><Sparkles size={18} /></div>
-                      <div>
-                        <p className="text-sm font-bold text-emerald-900 mb-1">Ready to Import!</p>
-                        <p className="text-xs text-emerald-700">
-                          This will create a new TitanGrade assignment matching your Google Classroom assignment.
-                          It will instantly download all student submissions (PDFs and Docs) securely for AI grading.
-                        </p>
+                    <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div className="flex items-start gap-3">
+                        <div className="text-emerald-600 mt-0.5"><Sparkles size={18} /></div>
+                        <div>
+                          <p className="text-sm font-bold text-emerald-900 mb-1">Ready to Import!</p>
+                          <p className="text-xs text-emerald-700">
+                            This will create the assignment and pull in all students and their submissions automatically.
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-2 flex items-center p-3 bg-white border border-emerald-200 rounded-lg">
+                        <input
+                          id="auto-load-materials"
+                          type="checkbox"
+                          checked={autoLoadMaterials}
+                          onChange={(e) => setAutoLoadMaterials(e.target.checked)}
+                          className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
+                        />
+                        <div className="ml-3">
+                          <label htmlFor="auto-load-materials" className="font-medium text-emerald-900 cursor-pointer text-sm">
+                            Auto-load assignment materials
+                          </label>
+                          <p className="text-xs text-emerald-700 mt-0.5">
+                            Extracts attached Google Docs/PDFs to use as the assignment worksheet/exemplar.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}
+
                 </>
               )}
             </div>

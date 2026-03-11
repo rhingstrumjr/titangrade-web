@@ -45,6 +45,7 @@ export function AssignmentSettings({ assignment, onUpdate }: AssignmentSettingsP
   // ── Save state ──
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   // ── Auto-Parse handler ──
   const handleAutoParse = async () => {
@@ -200,6 +201,7 @@ export function AssignmentSettings({ assignment, onUpdate }: AssignmentSettingsP
     if (!error && data) {
       onUpdate(data);
       setSaved(true);
+      setIsOpen(false);
       setTimeout(() => setSaved(false), 2000);
     } else {
       alert("Failed to save settings.");
@@ -207,7 +209,11 @@ export function AssignmentSettings({ assignment, onUpdate }: AssignmentSettingsP
   };
 
   return (
-    <details className="bg-white border border-gray-200 rounded-xl shadow-sm group">
+    <details 
+      open={isOpen} 
+      onToggle={(e: any) => setIsOpen(e.target.open)} 
+      className="bg-white border border-gray-200 rounded-xl shadow-sm group"
+    >
       <summary className="cursor-pointer px-6 py-4 flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-indigo-700 transition-colors select-none">
         <Settings size={16} className="text-gray-400 group-open:text-indigo-600 transition-colors" />
         Edit Assignment Settings

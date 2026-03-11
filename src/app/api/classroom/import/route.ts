@@ -96,7 +96,9 @@ export async function POST(req: NextRequest) {
         title: assignmentData.title,
         description: assignmentData.description,
         maxPoints: assignmentData.maxPoints,
+        materials: assignmentData.materials || [],
       },
+      students: Object.values(studentsMap),
       submissions
     });
   } catch (error: any) {
