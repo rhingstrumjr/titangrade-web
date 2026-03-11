@@ -68,9 +68,12 @@ export async function POST(req: Request) {
       console.error('Failed to update submission status:', updateError);
     }
     
+    // Default to 'immediate' if not set
+    const isImmediate = !assignment.feedback_release_mode || assignment.feedback_release_mode === 'immediate';
+
     // 4. Generate and attach Feedback Doc if immediate mode and linked to GC
     if (
-      assignment.feedback_release_mode === 'immediate' &&
+      isImmediate &&
       assignment.gc_course_id &&
       assignment.gc_coursework_id &&
       submission.gc_submission_id &&
