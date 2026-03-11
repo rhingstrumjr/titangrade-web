@@ -28,6 +28,7 @@ export default function GradebookPage() {
 
   // Bulk Selection State
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+  const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -197,9 +198,36 @@ export default function GradebookPage() {
     setSelectedStudentIds(next);
   };
 
-  const handleBulkCreateAssignment = () => {
-    alert(`Creating individualized assignment for ${selectedStudentIds.size} selected students. Redirecting to Assignment Builder...`);
-    // Example: router.push('/teacher/assignments/create?students=' + Array.from(selectedStudentIds).join(','));
+  const handleBulkCreateAssignment = async () => {
+    if (selectedStudentIds.size === 0) return;
+    setIsCreating(true);
+    
+    const studentNames = Array.from(selectedStudentIds)
+      .map(id => students.find(s => s.id === id)?.name)
+      .filter(Boolean)
+      .join(', ');
+
+    const title = `Targeted Review (${new Date().toLocaleDateString()})`;
+    const description = `This is a targeted review assignment created for: ${studentNames}.`;
+
+    const { data, error } = await supabase.from('assignments').insert([{
+      title,
+      class_id: classId,
+      grading_framework: 'standard',
+      max_score: 100,
+      max_attempts: 1,
+      feedback_release_mode: 'immediate',
+      is_socratic: true,
+      description
+    }]).select();
+
+    if (error) {
+      console.error("Error creating assignment:", error);
+      alert("Failed to create assignment");
+      setIsCreating(false);
+    } else if (data && data.length > 0) {
+      router.push(`/teacher/assignments/${data[0].id}`);
+    }
   };
 
   const handleSaveCell = async (score: string, feedback: string) => {
@@ -421,15 +449,24 @@ export default function GradebookPage() {
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setSelectedStudentIds(new Set())}
-              className="text-indigo-200 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
+              className="text-indigo-200 hover:text-white px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+              disabled={isCreating}
             >
               Cancel
             </button>
             <button 
               onClick={handleBulkCreateAssignment}
-              className="bg-white text-indigo-900 hover:bg-indigo-50 px-5 py-2 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95"
+              disabled={isCreating}
+              className="flex items-center gap-2 bg-white text-indigo-900 hover:bg-indigo-50 px-5 py-2 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95 disabled:opacity-80 disabled:cursor-not-allowed"
             >
-              Create Individualized Assignment
+              {isCreating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Individualized Assignment"
+              )}
             </button>
           </div>
         </div>
