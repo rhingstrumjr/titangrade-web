@@ -39,7 +39,11 @@ export async function POST(req: NextRequest) {
 
     if (submissions.length === 0) {
       console.log(`[post-feedback-doc] Found 0 graded submissions for assignment ${assignmentId}`);
-      return NextResponse.json({ success: true, count: 0 });
+      return NextResponse.json({ 
+        success: true, 
+        count: 0, 
+        debug: { skippedReasons: ["0 graded submissions found in database for this assignment"] } 
+      });
     }
     
     console.log(`[post-feedback-doc] Found ${submissions.length} graded submissions`);
