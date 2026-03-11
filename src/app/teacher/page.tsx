@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon, XCircle, Sparkles, Loader2, Copy } from "lucide-react";
+import { Users, PlusCircle, Trash2, FileText, Link as LinkIcon, XCircle, Sparkles, Loader2, Copy, Archive, ArchiveRestore } from "lucide-react";
 
 const supabase = createClient();
 
@@ -16,6 +16,7 @@ interface Class {
   name: string;
   created_at: string;
   gc_course_id?: string | null;
+  is_archived?: boolean;
 }
 
 interface RosterStudent {
@@ -52,6 +53,7 @@ export default function TeacherDashboard() {
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [googleConnected, setGoogleConnected] = useState(false);
+  const [showArchivedClasses, setShowArchivedClasses] = useState(false);
 
   // Google Classroom Import State
   const [providerToken, setProviderToken] = useState<string | null>(null);
@@ -839,7 +841,7 @@ export default function TeacherDashboard() {
 
   const handleDeleteClass = async () => {
     if (!selectedClassId) return;
-    if (!confirm("Are you sure you want to delete this CLASS completely? This will delete all its roster students. (Assignments will NOT be deleted, but they will lose their class tag).")) return;
+    if (!confirm("Are you sure you want to delete this CLASS completely? This will delete all its roster students. (Assignments will NOT be deleted, but they will lose their class tag). Consider hiding it with 'Archive Class' instead!")) return;
 
     // First clear out the assignments pointing to this class
     await supabase.from('assignments').update({ class_id: null }).eq('class_id', selectedClassId);
@@ -856,6 +858,24 @@ export default function TeacherDashboard() {
       alert("Failed to delete class.");
     }
   };
+
+  const handleArchiveClass = async (archive: boolean) => {
+    if (!selectedClassId) return;
+    
+    if (archive && !confirm("Are you sure you want to archive this class? It will be hidden from the active list, but all data will be preserved.")) return;
+
+    const { error } = await supabase.from('classes').update({ is_archived: archive }).eq('id', selectedClassId);
+    
+    if (!error) {
+      setClasses(classes.map(c => c.id === selectedClassId ? { ...c, is_archived: archive } : c));
+      setIsManagingRoster(false);
+      setSelectedClassId(null);
+    } else {
+      alert(`Failed to ${archive ? 'archive' : 'restore'} class: ${error.message}`);
+    }
+  };
+
+  const activeClasses = classes.filter(c => !c.is_archived || showArchivedClasses);
 
   const displayedAssignments = selectedClassId
     ? assignments.filter(a => a.class_id === selectedClassId)
@@ -1028,7 +1048,7 @@ export default function TeacherDashboard() {
                   <div className="md:col-span-4 p-4 border border-gray-200 rounded-lg">
                     <label className="block text-sm font-semibold mb-2">Assign to Classes</label>
                     <div className="flex flex-wrap gap-3">
-                      {classes.map(cls => (
+                      {classes.filter(c => !c.is_archived).map(cls => (
                         <label key={cls.id} className="flex items-center space-x-2 text-sm bg-white border border-gray-300 px-3 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
                           <input
                             type="checkbox"
@@ -1331,7 +1351,7 @@ export default function TeacherDashboard() {
                 All Classes
                 <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700">{assignments.length}</span>
               </button>
-              {classes.map(cls => {
+              {activeClasses.map(cls => {
                 const count = assignments.filter(a => a.class_id === cls.id).length;
                 return (
                   <div key={cls.id} className="flex items-center">
@@ -1340,6 +1360,7 @@ export default function TeacherDashboard() {
                       className={`px-5 py-3 text-base font-semibold whitespace-nowrap transition-all border-b-2 ${selectedClassId === cls.id ? "border-indigo-600 text-indigo-700 bg-indigo-50/50" : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300"}`}
                     >
                       {cls.name}
+                      {cls.is_archived && <span title="Archived Class"><Archive size={14} className="inline ml-1.5 text-gray-400" /></span>}
                       <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700">{count}</span>
                     </button>
                     {selectedClassId === cls.id && (
@@ -1379,6 +1400,19 @@ export default function TeacherDashboard() {
                 </button>
               )}
             </div>
+            
+            {classes.some(c => c.is_archived) && (
+              <label className="flex items-center cursor-pointer ml-auto mr-2 shrink-0">
+                <input
+                  type="checkbox"
+                  checked={showArchivedClasses}
+                  onChange={(e) => setShowArchivedClasses(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="relative w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                <span className="ms-2 text-sm font-medium text-gray-600">Show Archived</span>
+              </label>
+            )}
           </div>
 
           {isCreatingClass && (
@@ -1520,13 +1554,32 @@ export default function TeacherDashboard() {
               <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-3">
                   Class Roster: {classes.find(c => c.id === selectedClassId)?.name}
-                  <button
-                    onClick={handleDeleteClass}
-                    className="text-xs bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 px-2 py-1 rounded flex items-center transition-colors"
-                    title="Delete Class completely"
-                  >
-                    <Trash2 size={12} className="mr-1" /> Delete Class
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {classes.find(c => c.id === selectedClassId)?.is_archived ? (
+                      <button
+                        onClick={() => handleArchiveClass(false)}
+                        className="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700 px-2 py-1 rounded flex items-center transition-colors"
+                        title="Restore Class to active list"
+                      >
+                        <ArchiveRestore size={12} className="mr-1" /> Restore Class
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleArchiveClass(true)}
+                        className="text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800 px-2 py-1 rounded flex items-center transition-colors"
+                        title="Archive Class (hide from active list)"
+                      >
+                        <Archive size={12} className="mr-1" /> Archive Class
+                      </button>
+                    )}
+                    <button
+                      onClick={handleDeleteClass}
+                      className="text-xs bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 px-2 py-1 rounded flex items-center transition-colors border border-red-100"
+                      title="Delete Class completely"
+                    >
+                      <Trash2 size={12} className="mr-1" /> Delete
+                    </button>
+                  </div>
                 </h3>
                 <button onClick={() => setIsManagingRoster(false)} className="text-gray-400 hover:text-gray-600">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
