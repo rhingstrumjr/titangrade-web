@@ -107,8 +107,9 @@ export async function POST(req: NextRequest) {
           token
         );
         count++;
-      } catch (attachErr) {
+      } catch (attachErr: any) {
         console.error(`Failed to attach feedback doc for ${sub.student_name}:`, attachErr);
+        debugInfo.skippedReasons.push(`${sub.student_name}: Attachment failed - ${attachErr.message}`);
       }
     }
 
