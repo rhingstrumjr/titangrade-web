@@ -218,7 +218,8 @@ export default function GradebookPage() {
       max_attempts: 1,
       feedback_release_mode: 'immediate',
       is_socratic: true,
-      description
+      description,
+      rubric: ''
     }]).select();
 
     if (error) {

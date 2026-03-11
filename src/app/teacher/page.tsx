@@ -169,10 +169,10 @@ export default function TeacherDashboard() {
   const handleCreateAssignment = async (title: string, classIds: string[]) => {
     const inserts = classIds.length > 0
       ? classIds.map(classId => ({
-          title, class_id: classId, grading_framework: 'standard', max_score: 100, max_attempts: 1, feedback_release_mode: 'immediate', is_socratic: false
+          title, class_id: classId, grading_framework: 'standard', max_score: 100, max_attempts: 1, feedback_release_mode: 'immediate', is_socratic: false, rubric: ''
         }))
       : [{
-          title, class_id: selectedClassId || null, grading_framework: 'standard', max_score: 100, max_attempts: 1, feedback_release_mode: 'immediate', is_socratic: false
+          title, class_id: selectedClassId || null, grading_framework: 'standard', max_score: 100, max_attempts: 1, feedback_release_mode: 'immediate', is_socratic: false, rubric: ''
         }];
 
     const { data, error } = await supabase.from('assignments').insert(inserts).select();
