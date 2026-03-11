@@ -15,7 +15,7 @@ export async function syncClassroomSubmissions(
   const studentsRes = await fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/students`, { headers });
   let studentsMap: Record<string, { id: string; name: string; email: string }> = {};
   if (studentsRes.ok) {
-    const studentsData = await studentsRes.ok ? await studentsRes.json() : { students: [] };
+    const studentsData = await studentsRes.json();
     if (studentsData.students) {
       studentsData.students.forEach((s: any) => {
         studentsMap[s.userId] = {
@@ -52,12 +52,9 @@ export async function syncClassroomSubmissions(
 
     const studentInfo = studentsMap[sub.userId] || { name: "Unknown Student", email: "" };
 
-    // Determine status based on GC state and file attachments
-    const gcState = sub.state || "CREATED"; // NEW, CREATED, TURNED_IN, RETURNED, RECLAIMED_BY_STUDENT
+    const gcState = sub.state || "CREATED"; 
     const hasTurnedIn = gcState === "TURNED_IN" || gcState === "RETURNED";
     const hasFiles = gcFileIds.length > 0;
-    // Students who turned in AND have files → ready for grading (pending)
-    // Students who haven't turned in or have no files → awaiting submission
     const status = (hasTurnedIn && hasFiles) ? "pending" : "awaiting_submission";
 
     return {
@@ -74,9 +71,6 @@ export async function syncClassroomSubmissions(
 
   if (submissionsToUpsert.length === 0) return { count: 0 };
 
-  // 4. Update or Insert submissions. 
-  // We want to make sure existing submissions get their gc_file_ids refreshed 
-  // if more files were added in Classroom.
   const { data: existingSubs } = await supabase
     .from('submissions')
     .select('id, gc_submission_id, gc_file_ids, gc_state, status')
@@ -92,22 +86,15 @@ export async function syncClassroomSubmissions(
     if (!existing) {
       newsOnly.push(s);
     } else {
-      // Check if file list or GC state changed
       const oldIds = existing.gc_file_ids || [];
       const newIds = s.gc_file_ids || [];
       const stateChanged = existing.gc_state !== s.gc_state;
 
-      // TRIGGER REFRESH IF:
-      // 1. Old list is empty (legacy data)
-      // 2. Length differs
-      // 3. Any ID differs
-      // 4. GC submission state changed (e.g. NEW → TURNED_IN)
       const needsFileRefresh = oldIds.length === 0 ||
         oldIds.length !== newIds.length ||
         !newIds.every((id: string, i: number) => id === oldIds[i]);
 
       if (needsFileRefresh) {
-        console.log(`Refreshing ${s.student_name}: ${oldIds.length} -> ${newIds.length} files`);
         updatesNeeded.push(
           supabase.from('submissions')
             .update({
@@ -121,8 +108,6 @@ export async function syncClassroomSubmissions(
             .eq('id', existing.id)
         );
       } else if (stateChanged) {
-        // Only state changed (student turned in but no new files, or reclaimed)
-        // Only update if the submission hasn't been graded yet
         const updatePayload: Record<string, any> = { gc_state: s.gc_state };
         if (existing.status === 'awaiting_submission' || existing.status === 'pending') {
           updatePayload.status = s.status;
@@ -140,9 +125,7 @@ export async function syncClassroomSubmissions(
   }
 
   if (updatesNeeded.length > 0) {
-    const results = await Promise.all(updatesNeeded);
-    const errors = results.filter(r => r.error);
-    if (errors.length > 0) console.error("Sync update errors:", errors);
+    await Promise.all(updatesNeeded);
   }
 
   return { count: newsOnly.length, totalFetched: submissionsToUpsert.length, updatedCount: updatesNeeded.length };
@@ -152,22 +135,19 @@ export async function syncClassroomSubmissions(
  * Downloads a file from Google Drive and returns it as a Buffer with its metadata.
  */
 export async function downloadDriveFile(fileId: string, token: string) {
-  // 1. Get file metadata to determine MIME type
   const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=mimeType,name`, {
     headers: { Authorization: `Bearer ${token}` }
   });
 
   if (!metaRes.ok) {
-    const err = await metaRes.json();
-    console.error("Drive metadata error:", err);
-    throw new Error(`Failed to get file metadata: ${JSON.stringify(err)}`);
+    const err = await metaRes.text();
+    throw new Error(`Failed to get file metadata: ${err}`);
   }
   const meta = await metaRes.json();
 
   let downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
   let outMimeType = meta.mimeType;
 
-  // 2. Map Google Workspace formats to PDF export
   if (
     meta.mimeType === "application/vnd.google-apps.document" ||
     meta.mimeType === "application/vnd.google-apps.presentation" ||
@@ -177,23 +157,19 @@ export async function downloadDriveFile(fileId: string, token: string) {
     outMimeType = "application/pdf";
   }
 
-  // 3. Download the actual file / exported file
   const fileRes = await fetch(downloadUrl, {
     headers: { Authorization: `Bearer ${token}` }
   });
 
   if (!fileRes.ok) {
     const errorText = await fileRes.text();
-    console.error(`Drive fetch failed for ${fileId}. Status: ${fileRes.status}, Body: ${errorText}`);
     throw new Error(`Google Drive API Error (${fileRes.status}): ${errorText}`);
   }
 
   const arrayBuffer = await fileRes.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
-  // Ensure filename is safe for Content-Disposition header
   const safeName = (meta.name || 'document').replace(/[^a-zA-Z0-9.\-_ ()]/g, "_");
-  // Ensure it has a pdf extension if we exported it
   const finalName = outMimeType === "application/pdf" && !safeName.toLowerCase().endsWith('.pdf')
     ? `${safeName}.pdf`
     : safeName;
@@ -232,7 +208,7 @@ export async function attachFeedbackDocToSubmission(
   if (!createRes.ok) {
     const err = await createRes.text();
     console.error("Failed to create Google Doc:", err);
-    throw new Error("Failed to create Google Doc for feedback");
+    throw new Error(`Failed to create Google Doc for feedback: ${err}`);
   }
   
   const docData = await createRes.json();
@@ -261,7 +237,7 @@ export async function attachFeedbackDocToSubmission(
   if (!updateRes.ok) {
     const err = await updateRes.text();
     console.error("Failed to insert text into Google Doc:", err);
-    throw new Error("Failed to insert text into Google Doc");
+    throw new Error(`Failed to insert text into Google Doc: ${err}`);
   }
 
   // 3. Attach the Doc to the Google Classroom Submission
@@ -279,7 +255,7 @@ export async function attachFeedbackDocToSubmission(
   if (!attachRes.ok) {
     const err = await attachRes.text();
     console.error("Failed to attach Doc to Classroom submission:", err);
-    throw new Error("Failed to attach Doc to Classroom submission");
+    throw new Error(`Failed to attach Doc to Classroom submission: ${err}`);
   }
 
   return documentId;
