@@ -201,7 +201,12 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
             });
           }
         }
-        skillAverages.sort((a, b) => a.pctDemonstrated - b.pctDemonstrated);
+        skillAverages.sort((a, b) => {
+          const levelA = parseFloat(a.level) || 0;
+          const levelB = parseFloat(b.level) || 0;
+          if (levelA !== levelB) return levelA - levelB;
+          return a.pctDemonstrated - b.pctDemonstrated;
+        });
       }
 
       const MASTERY_THRESHOLD = 80;
