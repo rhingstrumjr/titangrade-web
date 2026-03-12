@@ -44,17 +44,13 @@ export interface AssignmentData {
   structured_rubric?: RubricCriterion[];
 }
 
-function calculateCost(usage: any, modelType: 'flash' | 'pro') {
+function calculateCost(usage: any) {
   if (!usage) return 0;
   const inputTokens = usage.inputTokens || usage.promptTokens || 0;
   const outputTokens = usage.outputTokens || usage.completionTokens || 0;
-  if (modelType === 'flash') {
-    // gemini-3.1-flash-lite-preview pricing
-    return (inputTokens / 1000000) * 0.25 + (outputTokens / 1000000) * 1.50;
-  } else {
-    // gemini-2.5-pro pricing
-    return (inputTokens / 1000000) * 1.25 + (outputTokens / 1000000) * 10.0; 
-  }
+  
+  // Gemini 3.1 Flash-Lite rates: $0.25 per 1M in / $1.50 per 1M out
+  return (inputTokens / 1000000) * 0.25 + (outputTokens / 1000000) * 1.50;
 }
 
 export async function fetchToBuffer(url: string) {
@@ -156,7 +152,7 @@ async function runVisionAgent({
     }),
   });
 
-  return { Transcription: object.Transcription, estCost: calculateCost(usage, 'flash') };
+  return { Transcription: object.Transcription, estCost: calculateCost(usage) };
 }
 
 async function runGradingAgent({
@@ -280,7 +276,7 @@ async function runGradingAgent({
     }),
   });
 
-  return { Score: object.Score, Reasoning: object.Reasoning, CategoryScores: (object as any).CategoryScores, SkillAssessments: (object as any).SkillAssessments, estCost: calculateCost(usage, 'flash') };
+  return { Score: object.Score, Reasoning: object.Reasoning, CategoryScores: (object as any).CategoryScores, SkillAssessments: (object as any).SkillAssessments, estCost: calculateCost(usage) };
 }
 
 async function runSocraticAgent({
@@ -319,7 +315,7 @@ async function runSocraticAgent({
     }),
   });
 
-  return { Feedback: object.Feedback, estCost: calculateCost(usage, 'flash') };
+  return { Feedback: object.Feedback, estCost: calculateCost(usage) };
 }
 
 export async function gradeSubmission(
