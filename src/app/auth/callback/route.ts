@@ -25,6 +25,15 @@ export async function GET(request: Request) {
           secure: process.env.NODE_ENV === 'production',
           maxAge: 3500 // 1 hour minus a small buffer
         });
+
+        if (data.session.provider_refresh_token) {
+          cookieStore.set('provider_refresh_token', data.session.provider_refresh_token, {
+            path: '/',
+            httpOnly: true, // Keep refresh token server-only for security
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: 60 * 60 * 24 * 30 // 30 days
+          });
+        }
       }
 
       return NextResponse.redirect(`${origin}${next}`)

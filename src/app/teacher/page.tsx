@@ -70,7 +70,11 @@ export default function TeacherDashboard() {
       provider: 'google',
       options: {
         scopes: 'https://www.googleapis.com/auth/classroom.courses.readonly https://www.googleapis.com/auth/classroom.coursework.students https://www.googleapis.com/auth/classroom.rosters.readonly https://www.googleapis.com/auth/classroom.profile.emails https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/documents',
-        redirectTo: `${window.location.origin}/teacher`
+        redirectTo: `${window.location.origin}/teacher`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
       }
     });
     if (error) {

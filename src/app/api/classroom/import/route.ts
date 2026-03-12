@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getValidatedProviderToken } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   let token = null;
@@ -11,8 +12,7 @@ export async function POST(req: NextRequest) {
 
   // Fallback to cookie if frontend did not provide it
   if (!token) {
-    const cookieStore = await cookies();
-    token = cookieStore.get("provider_token")?.value;
+    token = await getValidatedProviderToken();
   }
 
   if (!token) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import { syncClassroomSubmissions } from "@/lib/classroom";
+import { getValidatedProviderToken } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -12,10 +13,8 @@ export async function POST(req: NextRequest) {
     token = authHeader.split(" ")[1];
   }
 
-  // Fallback to cookie
   if (!token) {
-    const cookieStore = await cookies();
-    token = cookieStore.get("provider_token")?.value;
+    token = await getValidatedProviderToken();
   }
 
   if (!token) {
