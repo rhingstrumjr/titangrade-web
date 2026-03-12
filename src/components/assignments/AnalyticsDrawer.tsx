@@ -149,26 +149,55 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
         }
         categoryAverages.sort((a, b) => a.avgPct - b.avgPct);
       } else {
-        const skillMap: Record<string, { demonstrated: number; total: number; level: string; dimension: string }> = {};
+        // Marzano mode: aggregating skills
+        const skillMap: Record<string, { 
+          level: string; 
+          dimension: string; 
+          skillName: string;
+          studentEmails: Set<string>;
+          demonstratedEmails: Set<string>;
+        }> = {};
+
         for (const sub of latestSubs) {
           if (!sub.skill_assessments) continue;
           for (const sa of sub.skill_assessments) {
-            const key = `${sa.level}|${sa.skill}`;
-            if (!skillMap[key]) skillMap[key] = { demonstrated: 0, total: 0, level: sa.level, dimension: sa.dimension };
-            if (sa.status !== "not_assessed") {
-              skillMap[key].total++;
-              if (sa.status === "demonstrated") skillMap[key].demonstrated++;
+            // Normalize for more stable grouping
+            const normSkill = sa.skill.trim();
+            const normLevel = sa.level.trim();
+            const normDim = sa.dimension?.trim() || "DCI";
+            const normStatus = sa.status.trim().toLowerCase();
+            
+            // Key includes dimension to prevent merging different standards with similar names
+            const key = `${normLevel}|${normDim}|${normSkill.toLowerCase()}`;
+            
+            if (!skillMap[key]) {
+              skillMap[key] = { 
+                level: normLevel, 
+                dimension: normDim, 
+                skillName: normSkill, 
+                studentEmails: new Set(),
+                demonstratedEmails: new Set()
+              };
+            }
+            
+            if (normStatus !== "not_assessed") {
+              skillMap[key].studentEmails.add(sub.student_email);
+              if (normStatus === "demonstrated") {
+                skillMap[key].demonstratedEmails.add(sub.student_email);
+              }
             }
           }
         }
-        for (const [, data] of Object.entries(skillMap)) {
-          if (data.total > 0) {
+
+        for (const data of Object.values(skillMap)) {
+          const total = data.studentEmails.size;
+          if (total > 0) {
             skillAverages.push({
-              skill: Object.keys(skillMap).find(k => skillMap[k] === data)!.split("|")[1],
+              skill: data.skillName,
               level: data.level,
               dimension: data.dimension,
-              pctDemonstrated: (data.demonstrated / data.total) * 100,
-              total: data.total,
+              pctDemonstrated: (data.demonstratedEmails.size / total) * 100,
+              total: total,
             });
           }
         }

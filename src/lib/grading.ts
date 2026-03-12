@@ -183,8 +183,13 @@ export async function gradeSubmission(
   if (grading_framework === 'marzano') {
     categoryInstructions = `
     SKILL ASSESSMENT: For each skill listed in the proficiency scale at levels 2.0, 3.0, and 4.0, report whether the student demonstrated it on this test.
-    Identify the NGSS dimension for each skill: SEP (Science and Engineering Practices), DCI (Disciplinary Core Ideas), or CCC (Crosscutting Concepts).
-    Use the exact skill text from the proficiency scale.
+    
+    🚨 CRITICAL MARZANO RULES 🚨:
+    1. You MUST use the EXACT skill text and dimension (SEP, DCI, or CCC) as written in the provided rubric/proficiency scale.
+    2. DO NOT paraphrase, summarize, or re-word the skills. 
+    3. DO NOT invent your own skills or dimensions. If it is not explicitly in the rubric, do not list it.
+    4. Consistency is mandatory for analytics. Use the exact characters, spacing, and punctuation found in the rubric.
+    
     Status options:
     - "demonstrated": Clear evidence the student can do this
     - "not_demonstrated": This skill was assessed on the test but the student did not show it
