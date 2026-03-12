@@ -164,6 +164,7 @@ async function runGradingAgent({
   answerKeyInstructions,
   studentExemplars,
   rubricFiles,
+  structuredRubric,
 }: {
   transcription: string[];
   assignment: AssignmentData;
@@ -173,6 +174,7 @@ async function runGradingAgent({
   answerKeyInstructions: string;
   studentExemplars: any[];
   rubricFiles: ({ buffer: Buffer; mimeType: string } | null)[];
+  structuredRubric?: RubricCriterion[];
 }) {
   const frameworkSpecificScoring = assignment.grading_framework === 'marzano'
     ? `SCORING BEHAVIOR (Marzano): Grade as a professional mentor. Follow the Proficiency Scale decision tree exactly. Focus on evidence of mastery. If exactly 50% of a higher level is met, you must award the half-point.`
@@ -255,7 +257,7 @@ async function runGradingAgent({
       SkillAssessments: z.array(z.object({
         level: z.string().describe("Proficiency level from the scale: '2.0', '3.0', or '4.0'"),
         dimension: z.string().describe("NGSS dimension: 'SEP', 'DCI', or 'CCC'"),
-        skill: z.string().describe("The specific skill text from the proficiency scale"),
+        skill: z.string().describe("The exact skill text provided in the rubric. DO NOT reword or summarize."),
         status: z.enum(['demonstrated', 'not_demonstrated', 'partial', 'not_assessed']).describe("Status indicator")
       })).describe("Per-skill assessment list."),
     }
@@ -382,13 +384,24 @@ export async function gradeSubmission(
   }
 
   let categoryInstructions = '';
-  if (grading_framework === 'marzano') {
+  if (grading_framework === 'marzano' && structured_rubric && structured_rubric.length > 0) {
+    const skillList = structured_rubric.map(c => `- [${c.name}] ${c.description}`).join('\n');
+    categoryInstructions = `
+    SKILL ASSESSMENT: 
+    You MUST evaluate the student against these EXACT skills from the structured rubric:
+    ${skillList}
+    
+    RULES:
+    1. For each skill, determine if it was demonstrated, not demonstrated, or partially demonstrated.
+    2. DO NOT introduce new skills.
+    3. DO NOT reword the skills. Use the exact text provided in the 'skill' field of your response.
+    `;
+  } else if (grading_framework === 'marzano') {
     categoryInstructions = `
     SKILL ASSESSMENT: 
     1. Evaluate the student against each item in the rubric.
     2. ATOMIZATION RULE: If a single rubric item contains multiple distinct requirements or ideas (e.g., "Idea A AND Idea B"), YOU MUST SPLIT them into separate skill objects in your response. 
     3. Each split skill should keep the same 'level' and 'dimension' but have a concise 'skill' description focusing on just ONE requirement.
-    4. This ensures the student gets credit for what they DID demonstrate even if another part of that same rubric row is missing.
     `;
   } else {
     categoryInstructions = `
@@ -438,7 +451,8 @@ export async function gradeSubmission(
   const gradingOutput = await runGradingAgent({
     transcription: visionOutput.Transcription,
     assignment, frameworkInstructions, categoryInstructions, rubricTextBlock, answerKeyInstructions,
-    studentExemplars: studentExemplars || [], rubricFiles
+    studentExemplars: studentExemplars || [], rubricFiles,
+    structuredRubric: structured_rubric
   });
 
   console.log("3. Running Socratic Agent...");
