@@ -56,6 +56,30 @@ export default function AssignmentView() {
   // Analytics State
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
 
+  const isMarzano = assignment?.grading_framework === 'marzano';
+
+  const getScoreColor = (scoreStr: string | null) => {
+    if (!scoreStr) return "text-gray-900";
+    const scoreNum = parseFloat(scoreStr.split('/')[0]);
+    if (isNaN(scoreNum)) return "text-gray-900";
+
+    if (!isMarzano) {
+      const maxScore = assignment?.max_score || 100;
+      const pct = (scoreNum / maxScore) * 100;
+      if (pct >= 80) return "text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded";
+      if (pct >= 60) return "text-amber-700 bg-amber-50 px-2 py-0.5 rounded";
+      return "text-red-700 bg-red-50 px-2 py-0.5 rounded";
+    }
+
+    // Marzano Score-based colors
+    if (scoreNum >= 4.0) return "text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded";
+    if (scoreNum >= 3.5) return "text-blue-700 bg-blue-50 px-2 py-0.5 rounded";
+    if (scoreNum >= 3.0) return "text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded"; // Proficient
+    if (scoreNum >= 2.5) return "text-amber-700 bg-amber-50 px-2 py-0.5 rounded";
+    if (scoreNum >= 2.0) return "text-orange-700 bg-orange-50 px-2 py-0.5 rounded";
+    return "text-red-700 bg-red-50 px-2 py-0.5 rounded";
+  };
+
   // Helper to group submission data
   const groupSubmissions = (subData: Submission[]) => {
     const groups: Record<string, StudentGroup> = {};
@@ -599,7 +623,7 @@ export default function AssignmentView() {
                             <StatusBadge status={group.latestStatus} emailSent={latest.email_sent} />
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
-                            <span className="text-sm font-bold text-gray-900">{group.latestScore || '—'}</span>
+                            <span className={`text-sm font-bold ${getScoreColor(group.latestScore)}`}>{group.latestScore || '—'}</span>
                             {latest.pre_regrade_score && <div className="mt-0.5"><ScoreDiff oldScore={latest.pre_regrade_score} newScore={latest.score || ''} /></div>}
                           </td>
                           {/* Compact action icons */}

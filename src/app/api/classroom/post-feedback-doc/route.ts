@@ -56,26 +56,26 @@ export async function POST(req: NextRequest) {
     const gcSubsData = await gcSubsRes.json();
     const gcSubmissions = gcSubsData.studentSubmissions || [];
 
-    // Map GC submissions to see which ones have the feedback doc attached
-    const alreadyReleasedSubmissionIds = new Set<string>();
+    // Map GC submissions to see if they have the TitanGrade feedback doc attached
+    const existingFeedbackDocs = new Map<string, string>(); // submissionId -> documentId
     gcSubmissions.forEach((sub: any) => {
       if (sub.assignmentSubmission && sub.assignmentSubmission.attachments) {
-        const hasFeedbackDoc = sub.assignmentSubmission.attachments.some(
+        const feedbackAttachment = sub.assignmentSubmission.attachments.find(
           (a: any) => a.driveFile && a.driveFile.title?.startsWith("TitanGrade Feedback:")
         );
-        if (hasFeedbackDoc) {
-          alreadyReleasedSubmissionIds.add(sub.id);
+        if (feedbackAttachment) {
+          existingFeedbackDocs.set(sub.id, feedbackAttachment.driveFile.id);
         }
       }
     });
 
-    console.log(`[post-feedback-doc] alreadyReleasedSubmissionIds =`, Array.from(alreadyReleasedSubmissionIds));
+    console.log(`[post-feedback-doc] existingFeedbackDocs =`, Array.from(existingFeedbackDocs.keys()));
 
     let count = 0;
     const debugInfo: any = {
       totalGradedFromDb: submissions.length,
-      alreadyReleasedCount: alreadyReleasedSubmissionIds.size,
-      alreadyReleasedIds: Array.from(alreadyReleasedSubmissionIds),
+      existingDocsFound: existingFeedbackDocs.size,
+      existingDocIds: Array.from(existingFeedbackDocs.values()),
       skippedReasons: []
     };
     // Iterate over our graded submissions
@@ -86,11 +86,7 @@ export async function POST(req: NextRequest) {
         continue;
       }
       
-      // Skip if already released
-      if (alreadyReleasedSubmissionIds.has(sub.gc_submission_id)) {
-        debugInfo.skippedReasons.push(`${sub.student_name}: already released`);
-        continue;
-      }
+      const existingDocId = existingFeedbackDocs.get(sub.gc_submission_id);
 
       if (!sub.feedback) {
         debugInfo.skippedReasons.push(`${sub.student_name}: no feedback text`);
@@ -104,7 +100,8 @@ export async function POST(req: NextRequest) {
           sub.gc_submission_id,
           sub.student_name,
           sub.feedback,
-          token
+          token,
+          existingDocId
         );
         count++;
       } catch (attachErr: any) {

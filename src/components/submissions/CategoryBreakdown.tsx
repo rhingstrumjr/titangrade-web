@@ -34,11 +34,22 @@ export function CategoryBreakdown({
       '3.0': '3.0 — Target',
       '4.0': '4.0 — Transfer',
     };
-    const statusDisplay: Record<string, { icon: string; color: string; label: string }> = {
-      'demonstrated': { icon: '✅', color: 'text-emerald-700', label: 'Demonstrated' },
-      'partial': { icon: '⚠️', color: 'text-amber-600', label: 'Partial' },
-      'not_demonstrated': { icon: '❌', color: 'text-red-600', label: 'Not Demonstrated' },
-      'not_assessed': { icon: '⬜', color: 'text-gray-400', label: 'Not Assessed' },
+    const getStatusDisplay = (status: string, level: string) => {
+      const base: Record<string, { icon: string; color: string; label: string }> = {
+        'demonstrated': { icon: '✅', color: 'text-emerald-700', label: 'Demonstrated' },
+        'partial': { icon: '⚠️', color: 'text-amber-600', label: 'Partial' },
+        'not_demonstrated': { icon: '❌', color: 'text-red-600', label: 'Not Demonstrated' },
+        'not_assessed': { icon: '⬜', color: 'text-gray-400', label: 'Not Assessed' },
+      };
+
+      const display = base[status] || base['not_assessed'];
+      
+      if (status === 'demonstrated') {
+        if (level === '4.0') return { ...display, color: 'text-indigo-700 bg-indigo-50 px-1.5 rounded' };
+        if (level === '3.0') return { ...display, color: 'text-emerald-700 bg-emerald-50 px-1.5 rounded' };
+        if (level === '2.0') return { ...display, color: 'text-orange-700 bg-orange-50 px-1.5 rounded' };
+      }
+      return display;
     };
 
     const displayData = isEditing ? editSkillAssessments : sub.skill_assessments;
@@ -58,7 +69,7 @@ export function CategoryBreakdown({
                   <span className="text-xs font-bold text-indigo-700">{levelLabels[level] || `Level ${level}`}</span>
                 </div>
                 {skills.map((sa, i) => {
-                  const display = statusDisplay[sa.status] || statusDisplay['not_assessed'];
+                  const display = getStatusDisplay(sa.status, sa.level);
                   // Find the index in the full array for editing
                   const fullIdx = displayData!.indexOf(sa);
                   return (

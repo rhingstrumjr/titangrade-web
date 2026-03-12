@@ -283,16 +283,34 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
         }
       };
 
-      const getBarColor = (pct: number) => {
-        if (pct >= 80) return "bg-emerald-500";
-        if (pct >= 60) return "bg-amber-500";
+      const getBarColor = (val: number) => {
+        if (!isMarzano) {
+          if (val >= 80) return "bg-emerald-500";
+          if (val >= 60) return "bg-amber-500";
+          return "bg-red-500";
+        }
+        // Marzano Score-based colors
+        if (val >= 4.0) return "bg-indigo-500";
+        if (val >= 3.5) return "bg-blue-500";
+        if (val >= 3.0) return "bg-emerald-500";
+        if (val >= 2.5) return "bg-amber-500";
+        if (val >= 2.0) return "bg-orange-500";
         return "bg-red-500";
       };
 
       const getScoreColor = (score: number) => {
-        const pct = isMarzano ? (score / 4) * 100 : (score / maxScore) * 100;
-        if (pct >= 80) return "text-emerald-700 bg-emerald-50";
-        if (pct >= 60) return "text-amber-700 bg-amber-50";
+        if (!isMarzano) {
+          const pct = (score / maxScore) * 100;
+          if (pct >= 80) return "text-emerald-700 bg-emerald-50";
+          if (pct >= 60) return "text-amber-700 bg-amber-50";
+          return "text-red-700 bg-red-50";
+        }
+        // Marzano Score-based colors
+        if (score >= 4.0) return "text-indigo-700 bg-indigo-50";
+        if (score >= 3.5) return "text-blue-700 bg-blue-50";
+        if (score >= 3.0) return "text-emerald-700 bg-emerald-50";
+        if (score >= 2.5) return "text-amber-700 bg-amber-50";
+        if (score >= 2.0) return "text-orange-700 bg-orange-50";
         return "text-red-700 bg-red-50";
       };
 
@@ -325,7 +343,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
                 <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
                   <span className="text-[10px] font-medium text-gray-700">{bucket.count}</span>
                   <div
-                    className={`w-full rounded-t-sm transition-all duration-500 ${getBarColor(isMarzano ? (parseFloat(bucket.label) / 4) * 100 : parseInt(bucket.label))}`}
+                    className={`w-full rounded-t-sm transition-all duration-500 ${getBarColor(isMarzano ? parseFloat(bucket.label) : parseInt(bucket.label))}`}
                     style={{ height: `${(bucket.count / maxBucketCount) * 100}%`, minHeight: bucket.count > 0 ? "4px" : "2px" }}
                   />
                   <span className="text-[9px] text-gray-500 mt-0.5 leading-tight text-center hidden sm:block">
@@ -358,7 +376,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
                       <div className="text-xs font-medium text-gray-700 truncate" title={label}>{label}</div>
                       <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden relative">
                         <div
-                          className={`h-full rounded-full transition-all duration-700 ${getBarColor(pct)}`}
+                          className={`h-full rounded-full transition-all duration-700 ${isMarzano ? getBarColor((item as typeof skillAverages[0]).level === '4.0' ? 4.0 : (item as typeof skillAverages[0]).level === '3.0' ? 3.0 : 2.0) : getBarColor(pct)}`}
                           style={{ width: `${Math.max(pct, 2)}%` }}
                         />
                         <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800">
