@@ -734,7 +734,7 @@ export default function AssignmentView() {
                                                   <div className="flex justify-between items-start gap-4">
                                                     <div className="flex-1">
                                                       <p className="text-xs text-gray-500 uppercase font-semibold mb-1">Feedback</p>
-                                                      <p className="text-gray-700 italic">&quot;{sub.feedback}&quot;</p>
+                                                      <p className="text-gray-700 italic whitespace-pre-wrap">&quot;{sub.feedback}&quot;</p>
                                                     </div>
                                                     <button onClick={(e) => { e.stopPropagation(); startEditing(sub); }} className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-indigo-600 transition-colors bg-white border border-gray-200 hover:border-indigo-200 px-3 py-1.5 rounded-md relative z-10"><Edit2 size={14} /> Edit Grade</button>
                                                   </div>
@@ -742,7 +742,7 @@ export default function AssignmentView() {
                                                     <details className="mt-2">
                                                       <summary className="cursor-pointer text-xs font-medium text-purple-600 hover:text-purple-800 transition-colors">View previous feedback</summary>
                                                       <div className="mt-2 bg-purple-50 border border-purple-100 rounded-lg p-3">
-                                                        <p className="text-sm text-purple-800 italic">&quot;{sub.pre_regrade_feedback}&quot;</p>
+                                                        <p className="text-sm text-purple-800 italic whitespace-pre-wrap">&quot;{sub.pre_regrade_feedback}&quot;</p>
                                                       </div>
                                                     </details>
                                                   )}

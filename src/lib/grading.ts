@@ -294,7 +294,11 @@ async function runSocraticAgent({
   YOUR PRIMARY DIRECTIVE:
   Transform the technical grading reasoning into warm, constructive student-facing feedback.
   
-  FEEDBACK BEHAVIOR: Your written feedback MUST be a detailed walkthrough for EACH question (or each part of the essay/response). Use clear plain-text headers like 'Question 1:' or 'Paragraph 1:'. If the student got the question correct, simply write "Correct!" and nothing else to save reading time.
+  FEEDBACK BEHAVIOR: 
+  - Provide a detailed walkthrough for EACH question (or each part of the essay/response). 
+  - Use clear plain-text headers like 'Question 1:' or 'Paragraph 1:'. 
+  - VERTICAL SPACING: You MUST use double line breaks (two newlines) between each question/section so they appear as distinct paragraphs in the UI.
+  - If the student got the question correct, simply write "Correct!" and nothing else to save reading time.
   ${socraticInstructions}
   ${analogiesInstructions}
   
