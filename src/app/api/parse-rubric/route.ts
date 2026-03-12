@@ -26,8 +26,9 @@ RULES:
 - If the rubric uses descriptive levels (Excellent/Good/Fair/Poor), include them as performance levels AND convert to point values
 - If a Marzano proficiency scale is detected, YOU MUST extract each distinct skill, requirement, or "evidence statement" as a separate criterion.
 - Even if multiple skills belong to the same level (2.0, 3.0, 4.0), they MUST be separate entries.
+- CRITICAL: If a single rubric row or level contains multiple distinct requirements (e.g., separated by paragraphs, bullets, or "AND"), you MUST split them into MULTIPLE separate criteria objects. This is essential for granular assessment.
 - NAMING CONVENTION: For the 'name' field, use EXACTLY the level number followed by a clear label (e.g., "3.0 - Target", "2.0 - Foundational").
-- DESCRIPTION: The 'description' should be a concise, single-sentence requirement.
+- DESCRIPTION: The 'description' should be a concise, single-sentence requirement. Provide only the specific atomic requirement for that entry.
 - This standardization allows the analytics engine to group identical skills across different submissions.
 - Order criteria from lowest level to highest level (2.0 -> 3.0 -> 4.0).
 - Performance levels (levels field) should still be included for each criterion if applicable, from highest to lowest.`;

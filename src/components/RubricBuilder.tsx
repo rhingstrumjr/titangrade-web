@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, PlusCircle, ChevronDown, ChevronRight } from "lucide-react";
+import { Trash2, PlusCircle, ChevronDown, ChevronRight, Sparkles } from "lucide-react";
 import type { RubricCriterion, RubricLevel } from "@/types/submission";
 
 interface RubricBuilderProps {
@@ -38,6 +38,30 @@ export function RubricBuilder({ criteria, onChange }: RubricBuilderProps) {
 
   const toggleExpand = (index: number) => {
     setExpandedIndex(expandedIndex === index ? null : index);
+  };
+
+  const atomizeCriterion = (index: number) => {
+    const criterion = criteria[index];
+    if (!criterion.description) return;
+
+    // Split by double newline or newline followed by bullet
+    const parts = criterion.description
+      .split(/\n\n|\n(?=-|\*|\d+\. )/)
+      .map(p => p.trim())
+      .filter(Boolean);
+
+    if (parts.length <= 1) return;
+
+    const newCriteria = [...criteria];
+    const atomicItems: RubricCriterion[] = parts.map(part => ({
+      ...criterion,
+      description: part,
+      // If there are levels, we keep them but teacher might need to adjust
+      // Often levels are shared across parts of the same standard
+    }));
+
+    newCriteria.splice(index, 1, ...atomicItems);
+    onChange(newCriteria);
   };
 
   // ── Level management ──
@@ -153,8 +177,22 @@ export function RubricBuilder({ criteria, onChange }: RubricBuilderProps) {
                     onChange={(e) => updateCriterion(index, "description", e.target.value)}
                     placeholder="Describe what earns full credit for this criterion..."
                     rows={2}
-                    className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-sans"
                   />
+                  
+                  {/* Split Button Helper */}
+                  {criterion.description && (criterion.description.includes("\n\n") || criterion.description.split("\n").length > 2) && (
+                    <div className="mt-1">
+                      <button
+                        type="button"
+                        onClick={() => atomizeCriterion(index)}
+                        className="flex items-center gap-1.5 text-[10px] font-semibold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded transition-colors border border-amber-200"
+                      >
+                        <Sparkles size={10} />
+                        Split into separate skills
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Performance Levels Toggle */}
