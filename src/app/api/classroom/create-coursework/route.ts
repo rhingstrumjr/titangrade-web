@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import { syncClassroomSubmissions } from "@/lib/classroom";
 
 export async function POST(req: NextRequest) {
+  const supabase = await createClient();
   let token = null;
 
   const authHeader = req.headers.get("authorization");
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
 
     // 5. AUTO-SYNC: Immediately pull students roster as pending submissions
     try {
-      await syncClassroomSubmissions(assignmentId, courseId, gcCourseWork.id, token);
+      await syncClassroomSubmissions(assignmentId, courseId, gcCourseWork.id, token, supabase);
     } catch (syncErr) {
       console.error("Auto-sync failed during publication:", syncErr);
       // We don't fail the whole request because the assignment was already created and linked

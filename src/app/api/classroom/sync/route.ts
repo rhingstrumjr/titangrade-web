@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import { syncClassroomSubmissions } from "@/lib/classroom";
 
 export async function POST(req: NextRequest) {
+  const supabase = await createClient();
   let token = null;
 
   const authHeader = req.headers.get("authorization");
@@ -48,7 +49,8 @@ export async function POST(req: NextRequest) {
       assignmentId,
       assignment.gc_course_id,
       assignment.gc_coursework_id,
-      token
+      token,
+      supabase
     );
 
     return NextResponse.json({

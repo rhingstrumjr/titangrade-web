@@ -1,5 +1,3 @@
-import { supabase } from "./supabase";
-
 /**
  * Fetches students and submissions from Google Classroom and upserts them into TitanGrade.
  */
@@ -7,40 +5,36 @@ export async function syncClassroomSubmissions(
   assignmentId: string,
   courseId: string,
   courseWorkId: string,
-  token: string
+  token: string,
+  supabase: any
 ) {
   const headers = { Authorization: `Bearer ${token}` };
 
-  // 1. Fetch Students to map userId -> name, email
+  // 1. Fetch Students
   const studentsRes = await fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/students`, { headers });
-  let studentsMap: Record<string, { id: string; name: string; email: string }> = {};
+  let studentsList: any[] = [];
   if (studentsRes.ok) {
     const studentsData = await studentsRes.json();
-    if (studentsData.students) {
-      studentsData.students.forEach((s: any) => {
-        studentsMap[s.userId] = {
-          id: s.userId,
-          name: s.profile?.name?.fullName || "Unknown Student",
-          email: s.profile?.emailAddress || ""
-        };
-      });
-    }
+    studentsList = studentsData.students || [];
   }
 
   // 2. Fetch Submissions
   const subsRes = await fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/${courseWorkId}/studentSubmissions`, { headers });
-  if (!subsRes.ok) {
-    const err = await subsRes.json();
-    console.error("Submissions fetch error:", err);
-    throw new Error("Failed to fetch student submissions from Google Classroom");
+  let gcSubmissions: any[] = [];
+  if (subsRes.ok) {
+    const subsData = await subsRes.json();
+    gcSubmissions = subsData.studentSubmissions || [];
+  } else {
+    console.error("Submissions fetch error or none immediately available.");
   }
-  const subsData = await subsRes.json();
-  const gcSubmissions = subsData.studentSubmissions || [];
 
-  // 3. Map to TitanGrade format
-  const submissionsToUpsert = gcSubmissions.map((sub: any) => {
+  const subsByUserId = new Map(gcSubmissions.map(s => [s.userId, s]));
+
+  // 3. Map to TitanGrade format based on ROSTER
+  const submissionsToUpsert = studentsList.map((student: any) => {
+    const sub = subsByUserId.get(student.userId);
     const gcFileIds: string[] = [];
-    if (sub.assignmentSubmission && sub.assignmentSubmission.attachments) {
+    if (sub && sub.assignmentSubmission && sub.assignmentSubmission.attachments) {
       sub.assignmentSubmission.attachments.forEach((a: any) => {
         if (a.driveFile && !a.driveFile.title?.startsWith("TitanGrade Feedback:")) {
           gcFileIds.push(a.driveFile.id);
@@ -49,52 +43,54 @@ export async function syncClassroomSubmissions(
     }
 
     const driveFileId = gcFileIds[0] || "";
+    const email = student.profile?.emailAddress || "";
+    const name = student.profile?.name?.fullName || "Unknown Student";
 
-    const studentInfo = studentsMap[sub.userId] || { name: "Unknown Student", email: "" };
-
-    const gcState = sub.state || "CREATED"; 
+    const gcState = sub ? (sub.state || "CREATED") : "CREATED"; 
     const hasTurnedIn = gcState === "TURNED_IN" || gcState === "RETURNED";
     const hasFiles = gcFileIds.length > 0;
     const status = (hasTurnedIn && hasFiles) ? "pending" : "awaiting_submission";
 
     return {
       assignment_id: assignmentId,
-      student_name: studentInfo.name,
-      student_email: studentInfo.email,
+      student_name: name,
+      student_email: email,
       status,
-      gc_submission_id: sub.id,
+      gc_submission_id: sub ? sub.id : null,
       gc_state: gcState,
       file_url: driveFileId ? `drive:${driveFileId}` : "",
       gc_file_ids: gcFileIds,
     };
   });
 
-  if (submissionsToUpsert.length === 0) return { count: 0 };
+  if (submissionsToUpsert.length === 0) return { count: 0, totalFetched: 0, updatedCount: 0 };
 
   const { data: existingSubs } = await supabase
     .from('submissions')
-    .select('id, gc_submission_id, gc_file_ids, gc_state, status')
+    .select('id, gc_submission_id, gc_file_ids, gc_state, status, student_email, score, feedback')
     .eq('assignment_id', assignmentId);
 
-  const existingMap = new Map((existingSubs || []).map(s => [s.gc_submission_id, s]));
+  // Match by email primarily to avoid duplicates when gc_submission_id changes from null
+  const existingMap = new Map<string, any>((existingSubs || []).map((s: any) => [s.student_email, s]));
 
   const newsOnly = [];
   const updatesNeeded = [];
 
   for (const s of submissionsToUpsert) {
-    const existing = existingMap.get(s.gc_submission_id);
+    const existing = existingMap.get(s.student_email);
     if (!existing) {
       newsOnly.push(s);
     } else {
       const oldIds = existing.gc_file_ids || [];
       const newIds = s.gc_file_ids || [];
       const stateChanged = existing.gc_state !== s.gc_state;
+      const gcSubIdChanged = existing.gc_submission_id !== s.gc_submission_id;
 
       const needsFileRefresh = oldIds.length === 0 ||
         oldIds.length !== newIds.length ||
         !newIds.every((id: string, i: number) => id === oldIds[i]);
 
-      if (needsFileRefresh) {
+      if (needsFileRefresh || gcSubIdChanged) {
         updatesNeeded.push(
           supabase.from('submissions')
             .update({
@@ -102,8 +98,9 @@ export async function syncClassroomSubmissions(
               file_url: s.file_url,
               status: s.status,
               gc_state: s.gc_state,
-              score: null,
-              feedback: 'Sync detected new/changed file attachments. Ready for import.'
+              gc_submission_id: s.gc_submission_id,
+              score: existing.score,
+              feedback: needsFileRefresh ? 'Sync detected new/changed file attachments. Ready for import.' : existing.feedback
             })
             .eq('id', existing.id)
         );
