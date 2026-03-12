@@ -364,9 +364,10 @@ export async function gradeSubmission(
     - **Score 0.0**: No evidence of understanding.
 
     CRITICAL RULES:
-    1. THE 50% RULE: Half-points (1.5, 2.5, 3.5) generally represent mastering the lower level completely AND correctly answering at least 50% of the next level up.
+    1. THE 50% RULE: Half-points (1.5, 2.5, 3.5) represent mastering the lower level completely AND correctly answering AT LEAST 50% of the next level up. 
+       *(Clarification: If there are 2 skills at Level 3 and the student gets 1 correct, that is 50%—YOU MUST AWARD THE 2.5).*
     2. THE "NUANCE" EXCEPTION: If a student gets a question wrong in a lower level (e.g. L2) but demonstrates that same concept correctly in a more difficult context (e.g. L3), treat the L2 error as "minor" and do not cap the score.
-    3. DETERMINISTIC COUNTING: Count the total questions per level and the total correct per level. Report this breakdown in your Reasoning.
+    3. DETERMINISTIC COUNTING: Count the total questions/skills per level and the total correct per level. Report this breakdown in your Reasoning (e.g., "L3: 1/2 correct (50%) -> Score 2.5").
     `;
   }
 
