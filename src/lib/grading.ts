@@ -174,6 +174,10 @@ async function runGradingAgent({
   studentExemplars: any[];
   rubricFiles: ({ buffer: Buffer; mimeType: string } | null)[];
 }) {
+  const frameworkSpecificScoring = assignment.grading_framework === 'marzano'
+    ? `SCORING BEHAVIOR (Marzano): Grade as a professional mentor. Follow the Proficiency Scale decision tree exactly. Focus on evidence of mastery. If exactly 50% of a higher level is met, you must award the half-point.`
+    : `SCORING BEHAVIOR (Standard): Grade strictly by the rubric with NO generosity bias. If work is missing, the score for that section is 0 — do not give partial credit for "effort" or "attempting." Only the rubric criteria determine the score.`;
+
   const systemPrompt = `
   You are an expert, meticulous science teacher grading an assignment titled: "${assignment.title}".
   The maximum possible score is: ${assignment.max_score}.
@@ -183,11 +187,10 @@ async function runGradingAgent({
   
   ${frameworkInstructions}
   ${categoryInstructions}
+  ${frameworkSpecificScoring}
   ${rubricTextBlock}
   ${answerKeyInstructions}
   
-  SCORING BEHAVIOR: Grade strictly by the rubric with NO generosity bias. If work is missing, the score for that section is 0 — do not give partial credit for "effort" or "attempting." Only the rubric criteria determine the score.
-
   EVALUATION PROCESS:
   1. Review the Transcription provided.
   2. Compare the transcribed answers against the rubric and/or exemplar.
@@ -364,10 +367,13 @@ export async function gradeSubmission(
     - **Score 0.0**: No evidence of understanding.
 
     CRITICAL RULES:
-    1. THE 50% RULE: Half-points (1.5, 2.5, 3.5) represent mastering the lower level completely AND correctly answering AT LEAST 50% of the next level up. 
-       *(Clarification: If there are 2 skills at Level 3 and the student gets 1 correct, that is 50%—YOU MUST AWARD THE 2.5).*
-    2. THE "NUANCE" EXCEPTION: If a student gets a question wrong in a lower level (e.g. L2) but demonstrates that same concept correctly in a more difficult context (e.g. L3), treat the L2 error as "minor" and do not cap the score.
-    3. DETERMINISTIC COUNTING: Count the total questions/skills per level and the total correct per level. Report this breakdown in your Reasoning (e.g., "L3: 1/2 correct (50%) -> Score 2.5").
+    1. IGNORE POINTS: Marzano scoring ignores "max points" or "pts". Do not attempt to sum points or calculate a percentage of points. 
+    2. THE 50% MASTERY RULE: Half-points (1.5, 2.5, 3.5) represent mastering the lower level completely AND correctly demonstrating AT LEAST 50% of the skills in the next level up. 
+       - If a level has 2 skills and the student gets 1 correct, that is 50% -> Award the half-point (e.g., 2.5).
+       - If a level has 3 skills and the student gets 1 correct, that is 33% -> Do NOT award the half-point (remain at 2.0).
+       - If a level has 3 skills and the student gets 2 correct, that is 66% -> Award the half-point (e.g., 2.5).
+    3. THE "NUANCE" EXCEPTION: If a student gets a question wrong in a lower level (e.g. L2) but demonstrates that same concept correctly in a more difficult context (e.g. L3), treat the L2 error as "minor" and do not cap the score.
+    4. DETERMINISTIC COUNTING: In your Reasoning, explicitly state the count: "L3 Skills: [X] Demonstrated / [Y] Total ([Z]%). Score applied: [Score]".
     `;
   }
 
