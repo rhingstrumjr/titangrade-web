@@ -347,21 +347,26 @@ export async function gradeSubmission(
     VALID SCORES: 0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0
     You MUST output one of these exact values. No other scores are allowed.
 
+    PROFESSIONAL JUDGMENT GUIDELINES:
+    - **Categorize Errors**: Distinguish between "Conceptual Errors" (student doesn't understand the core science) vs "Minor Errors" (simple calculation slip, typo, or missed small detail while the logic remains correct).
+    - **Holistic Floor**: A student should not be penalized to a 2.0 just for 1 minor error in Level 2.0 foundational work if they show 100% mastery of Level 3.0 target work.
+
     COMPREHENSIVE DECISION TREE:
-    - **Score 4.0**: Student shows in-depth inferences and applications that go beyond what was taught (Level 4.0 content), in addition to score 3.0 performance.
-    - **Score 3.5**: In addition to score 3.0 performance, partial success (at least 50% correct) at Level 4.0 content.
-    - **Score 3.0**: No major errors or omissions regarding any Level 2.0 (Foundational) or Level 3.0 (Target) content.
-    - **Score 2.5**: No major errors or omissions regarding Level 2.0 content AND partial success (HALF OR MORE / >=50% correct) at Level 3.0 content.
-    - **Score 2.0**: No major errors or omissions regarding the Level 2.0 content (Foundational), but major errors or omissions regarding Level 3.0 content.
-    - **Score 1.5**: Partial success (at least 50% correct) at Level 2.0 content.
+    - **Score 4.0**: In-depth inferences and applications that go beyond Level 3.0 content. No conceptual errors in L2/L3.
+    - **Score 3.5**: Score 3.0 performance PLUS partial success (>=50%) at Level 4.0 content.
+    - **Score 3.0**: **Target Mastery.** Mastery of all Level 2.0 and Level 3.0 content. *Allow for 1 minor/silly error if the core science is demonstrated everywhere else.*
+    - **Score 2.5**: Full mastery of Level 2.0 AND partial success (>=50%) at Level 3.0 content. 
+      *(Special Case: If L3 is 100% correct, allow for 1 minor foundational error in L2).*
+    - **Score 2.0**: **Foundational Mastery.** Mastery of Level 2.0 content. *Major errors* on Level 3.0 content.
+    - **Score 1.5**: Partial success (>=50%) at Level 2.0 foundational content.
     - **Score 1.0**: With help, partial success at Level 2.0 and/or Level 3.0 content.
-    - **Score 0.5**: Minimal evidence of understanding, even with help.
-    - **Score 0.0**: No evidence of understanding or blank submission.
+    - **Score 0.5**: Minimal evidence of understanding.
+    - **Score 0.0**: No evidence of understanding.
 
     CRITICAL RULES:
-    1. FOUNDATIONAL FIRST: A student CANNOT receive a score of 3.0 or higher if they have substantial errors in the Level 2.0 (foundational) material.
-    2. THE 50% RULE: Half-points (1.5, 2.5, 3.5) represent mastering the lower level completely AND correctly answering at least 50% of the questions in the next proficiency level up.
-    3. DETERMINISTIC COUNTING: You MUST scan the rubric to identify which questions belong to which Level (2.0, 3.0, 4.0). Count the total questions per level and the total correct per level. Report this breakdown in your Reasoning.
+    1. THE 50% RULE: Half-points (1.5, 2.5, 3.5) generally represent mastering the lower level completely AND correctly answering at least 50% of the next level up.
+    2. THE "NUANCE" EXCEPTION: If a student gets a question wrong in a lower level (e.g. L2) but demonstrates that same concept correctly in a more difficult context (e.g. L3), treat the L2 error as "minor" and do not cap the score.
+    3. DETERMINISTIC COUNTING: Count the total questions per level and the total correct per level. Report this breakdown in your Reasoning.
     `;
   }
 
