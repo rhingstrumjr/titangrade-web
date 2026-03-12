@@ -41,7 +41,7 @@ export default function TeacherDashboard() {
   const checkUserAndFetchData = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) {
-      router.push("/auth/signin");
+      router.push("/login");
       return;
     }
     const token = session.provider_token;
@@ -69,7 +69,7 @@ export default function TeacherDashboard() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        scopes: 'https://www.googleapis.com/auth/classroom.courses.readonly https://www.googleapis.com/auth/classroom.coursework.students https://www.googleapis.com/auth/classroom.rosters.readonly https://www.googleapis.com/auth/classroom.profile.emails https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/documents',
+        scopes: 'https://www.googleapis.com/auth/classroom.courses.readonly https://www.googleapis.com/auth/classroom.coursework.students https://www.googleapis.com/auth/classroom.rosters.readonly https://www.googleapis.com/auth/classroom.profile.emails https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/documents',
         redirectTo: `${window.location.origin}/teacher`
       }
     });
@@ -247,7 +247,7 @@ export default function TeacherDashboard() {
             <span className="text-indigo-600 border-2 border-indigo-600 rounded-md px-2 py-0.5">T</span> 
             TitanGrade
           </h1>
-          <button onClick={async () => { await supabase.auth.signOut(); router.push('/auth/signin'); }} className="text-gray-500 hover:text-gray-700 font-medium">
+          <button onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }} className="text-gray-500 hover:text-gray-700 font-medium">
             Sign Out
           </button>
         </div>
