@@ -44,7 +44,7 @@ Do NOT generate a full-class reteach lesson plan. Instead, generate highly targe
 Keep it bite-sized, practical, and specific to the content area. Use markdown formatting with headers.`;
 
     const { text, usage } = await generateText({
-      model: google("gemini-2.5-flash"),
+      model: google("gemini-3.1-flash-lite-preview"),
       system: systemPrompt,
       prompt: `Generate bite-sized mini-lesson interventions for the assignment "${assignmentTitle}" based on the trouble spots listed in the system prompt.`,
       temperature: 0.7,

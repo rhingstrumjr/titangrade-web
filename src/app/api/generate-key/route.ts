@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
     // Use Gemini 2.5 Flash to generate the answer key
     const result = await generateObject({
-      model: google('gemini-2.5-flash'),
+      model: google('gemini-3.1-flash-lite-preview'),
       schema: answerKeySchema,
       system: `
       You are an expert teacher creating an answer key for a blank worksheet, quiz, or test.
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
             project: 'TitanGrade',
             tokens_used: totalTokens,
             cost: estCost,
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             context: 'Automated Answer Key Generation'
           })
         });

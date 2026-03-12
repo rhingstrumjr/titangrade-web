@@ -154,7 +154,7 @@ export async function gradeSubmission(
     │  4.0   │ All correct  │ All correct  │ All correct  │ Exceeds the standard     │
     │  3.5   │ All correct  │ All correct  │ Some correct │ Proficient + some transfer│
     │  3.0   │ All correct  │ All correct  │ None/N/A     │ Meets the standard       │
-    │  2.5   │ All correct  │ Most correct │ —            │ Almost proficient        │
+    │  2.5   │ All correct  │ Some correct │ —            │ Almost proficient        │
     │  2.0   │ All correct  │ Few/none     │ —            │ Foundational only        │
     │  1.5   │ Most correct │ Few/none     │ —            │ Partial foundations      │
     │  1.0   │ Some correct │ None         │ —            │ Beginning understanding  │
@@ -221,7 +221,7 @@ export async function gradeSubmission(
     } else if (attemptNumber >= 3) {
       baseSocratic += `\n  ATTEMPT ${attemptNumber}: You may now walk them through the solution step-by-step or reveal the answer and explicitly explain why, as they are struggling after multiple attempts.`;
     }
-    
+
     socraticInstructions = baseSocratic;
   } else {
     socraticInstructions = `
@@ -420,7 +420,7 @@ export async function gradeSubmission(
 
   // Call Gemini
   const { object, usage } = await generateObject({
-    model: google('gemini-2.5-flash'),
+    model: google('gemini-3.1-flash-lite-preview'),
     system: systemPrompt,
     messages: aiMessages,
     temperature: 0.1,
@@ -436,8 +436,8 @@ export async function gradeSubmission(
     const usageAny = usage as any;
     const inputTokens = usageAny.inputTokens || usageAny.promptTokens || 0;
     const outputTokens = usageAny.outputTokens || usageAny.completionTokens || 0;
-    // Rough cost for gemini-2.5-flash: $0.075/1M input, $0.30/1M output
-    estCost = (inputTokens / 1000000) * 0.075 + (outputTokens / 1000000) * 0.3;
+    // Rough cost for gemini-3.1-flash-lite-preview: $0.25/1M input, $1.50/1M output
+    estCost = (inputTokens / 1000000) * 0.25 + (outputTokens / 1000000) * 1.5;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
