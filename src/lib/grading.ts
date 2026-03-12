@@ -346,6 +346,22 @@ export async function gradeSubmission(
     GRADING FRAMEWORK (Marzano 4.0 Proficiency Scale):
     VALID SCORES: 0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0
     You MUST output one of these exact values. No other scores are allowed.
+
+    COMPREHENSIVE DECISION TREE:
+    - **Score 4.0**: Student shows in-depth inferences and applications that go beyond what was taught (Level 4.0 content), in addition to score 3.0 performance.
+    - **Score 3.5**: In addition to score 3.0 performance, partial success (at least 50% correct) at Level 4.0 content.
+    - **Score 3.0**: No major errors or omissions regarding any Level 2.0 (Foundational) or Level 3.0 (Target) content.
+    - **Score 2.5**: No major errors or omissions regarding Level 2.0 content AND partial success (HALF OR MORE / >=50% correct) at Level 3.0 content.
+    - **Score 2.0**: No major errors or omissions regarding the Level 2.0 content (Foundational), but major errors or omissions regarding Level 3.0 content.
+    - **Score 1.5**: Partial success (at least 50% correct) at Level 2.0 content.
+    - **Score 1.0**: With help, partial success at Level 2.0 and/or Level 3.0 content.
+    - **Score 0.5**: Minimal evidence of understanding, even with help.
+    - **Score 0.0**: No evidence of understanding or blank submission.
+
+    CRITICAL RULES:
+    1. FOUNDATIONAL FIRST: A student CANNOT receive a score of 3.0 or higher if they have substantial errors in the Level 2.0 (foundational) material.
+    2. THE 50% RULE: Half-points (1.5, 2.5, 3.5) represent mastering the lower level completely AND correctly answering at least 50% of the questions in the next proficiency level up.
+    3. DETERMINISTIC COUNTING: You MUST scan the rubric to identify which questions belong to which Level (2.0, 3.0, 4.0). Count the total questions per level and the total correct per level. Report this breakdown in your Reasoning.
     `;
   }
 
