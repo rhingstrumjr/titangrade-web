@@ -269,7 +269,7 @@ async function runGradingAgent({
     };
 
   const { object, usage } = await generateObject({
-    model: google('gemini-2.5-pro'),
+    model: google('gemini-3.1-flash-lite-preview'),
     system: systemPrompt,
     messages: aiMessages,
     temperature: 0.0,
@@ -280,7 +280,7 @@ async function runGradingAgent({
     }),
   });
 
-  return { Score: object.Score, Reasoning: object.Reasoning, CategoryScores: (object as any).CategoryScores, SkillAssessments: (object as any).SkillAssessments, estCost: calculateCost(usage, 'pro') };
+  return { Score: object.Score, Reasoning: object.Reasoning, CategoryScores: (object as any).CategoryScores, SkillAssessments: (object as any).SkillAssessments, estCost: calculateCost(usage, 'flash') };
 }
 
 async function runSocraticAgent({
