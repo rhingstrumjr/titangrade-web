@@ -24,7 +24,7 @@ For each criterion, extract:
 RULES:
 - Extract ALL criteria, even if they are listed as sub-sections
 - If the rubric uses descriptive levels (Excellent/Good/Fair/Poor), include them as performance levels AND convert to point values
-- If a Marzano proficiency scale is detected, use the levels (2.0, 3.0, 4.0) as criteria names with appropriate descriptions
+- If a Marzano proficiency scale is detected, extract each distinct skill, requirement, or "evidence statement" as a separate criterion, even if they belong to the same level (2.0, 3.0, 4.0). Use the level as the name (e.g. "3.0 - Target") for each and keep them grouped. This prevents large walls of text in a single rubric row and allows for more granular AI grading.
 - Preserve the original rubric language as much as possible in the descriptions
 - Order criteria in the same order they appear in the rubric
 - Levels should be ordered from highest to lowest points`;

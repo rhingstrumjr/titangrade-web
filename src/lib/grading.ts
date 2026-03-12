@@ -373,7 +373,11 @@ export async function gradeSubmission(
   let categoryInstructions = '';
   if (grading_framework === 'marzano') {
     categoryInstructions = `
-    SKILL ASSESSMENT: For each skill listed in the proficiency scale at levels 2.0, 3.0, and 4.0, report whether the student demonstrated it.
+    SKILL ASSESSMENT: 
+    1. Evaluate the student against each item in the rubric.
+    2. ATOMIZATION RULE: If a single rubric item contains multiple distinct requirements or ideas (e.g., "Idea A AND Idea B"), YOU MUST SPLIT them into separate skill objects in your response. 
+    3. Each split skill should keep the same 'level' and 'dimension' but have a concise 'skill' description focusing on just ONE requirement.
+    4. This ensures the student gets credit for what they DID demonstrate even if another part of that same rubric row is missing.
     `;
   } else {
     categoryInstructions = `
