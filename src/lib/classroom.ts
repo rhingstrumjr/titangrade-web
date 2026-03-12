@@ -135,7 +135,7 @@ export async function syncClassroomSubmissions(
  * Downloads a file from Google Drive and returns it as a Buffer with its metadata.
  */
 export async function downloadDriveFile(fileId: string, token: string) {
-  const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=mimeType,name`, {
+  const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=mimeType,name&supportsAllDrives=true&includeItemsFromAllDrives=true`, {
     headers: { Authorization: `Bearer ${token}` }
   });
 
@@ -145,7 +145,7 @@ export async function downloadDriveFile(fileId: string, token: string) {
   }
   const meta = await metaRes.json();
 
-  let downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+  let downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`;
   let outMimeType = meta.mimeType;
 
   if (
@@ -153,7 +153,7 @@ export async function downloadDriveFile(fileId: string, token: string) {
     meta.mimeType === "application/vnd.google-apps.presentation" ||
     meta.mimeType === "application/vnd.google-apps.spreadsheet"
   ) {
-    downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/pdf`;
+    downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/pdf&supportsAllDrives=true`;
     outMimeType = "application/pdf";
   }
 
