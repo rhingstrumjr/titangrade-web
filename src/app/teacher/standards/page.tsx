@@ -611,39 +611,128 @@ export default function StandardsPage() {
               </>
             ) : (
               <>
-                {/* Preview */}
+                {/* Editable Preview */}
                 <div className="mb-4">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-2">
-                    Preview — {importPreview.length} standard{importPreview.length !== 1 ? "s" : ""} found
-                  </h4>
-                  <div className="space-y-3 max-h-[50vh] overflow-y-auto">
-                    {importPreview.map((std: any, i: number) => (
-                      <div key={i} className="border border-gray-200 rounded-lg p-4 bg-gray-50/50">
-                        <div className="flex items-center gap-2 mb-2">
-                          {std.dimension && (
-                            <span
-                              className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
-                                (DIMENSION_COLORS[std.dimension] || DIMENSION_COLORS.DCI).bg
-                              } ${(DIMENSION_COLORS[std.dimension] || DIMENSION_COLORS.DCI).text} ${
-                                (DIMENSION_COLORS[std.dimension] || DIMENSION_COLORS.DCI).border
-                              }`}
-                            >
-                              {std.dimension}
-                            </span>
-                          )}
-                          <span className="font-mono font-bold text-sm text-indigo-700">{std.code}</span>
-                        </div>
-                        <p className="text-sm text-gray-700 mb-2">{std.description}</p>
-                        {std.learning_targets?.map((lt: any, j: number) => {
-                          const lvl = LEVEL_COLORS[lt.level] || LEVEL_COLORS["3.0"];
-                          return (
-                            <div key={j} className={`text-xs px-2 py-1 rounded mb-1 ${lvl.bg} ${lvl.text}`}>
-                              <span className="font-semibold">{lt.level}:</span> {lt.description}
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-semibold text-gray-700">
+                      Preview — {importPreview.length} standard{importPreview.length !== 1 ? "s" : ""} found
+                    </h4>
+                    <span className="text-xs text-gray-400">Click targets to edit • add or remove as needed</span>
+                  </div>
+                  <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
+                    {importPreview.map((std: any, stdIdx: number) => {
+                      const dimStyle = DIMENSION_COLORS[std.dimension] || DIMENSION_COLORS.DCI;
+                      // Group targets by level
+                      const targetsByLevel: Record<string, { description: string; _editKey: string }[]> = { "2.0": [], "3.0": [], "4.0": [] };
+                      (std.learning_targets || []).forEach((lt: any, ltIdx: number) => {
+                        const key = lt._editKey || `${stdIdx}-${lt.level}-${ltIdx}`;
+                        if (!targetsByLevel[lt.level]) targetsByLevel[lt.level] = [];
+                        targetsByLevel[lt.level].push({ description: lt.description, _editKey: key });
+                      });
+
+                      return (
+                        <div key={stdIdx} className="border border-gray-200 rounded-lg bg-white shadow-sm overflow-hidden">
+                          {/* Standard Header */}
+                          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              {std.dimension && (
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${dimStyle.bg} ${dimStyle.text} ${dimStyle.border} flex-shrink-0`}>
+                                  {std.dimension}
+                                </span>
+                              )}
+                              <span className="font-mono font-bold text-sm text-indigo-700 flex-shrink-0">{std.code}</span>
+                              <span className="text-xs text-gray-600 truncate">{std.description}</span>
                             </div>
-                          );
-                        })}
-                      </div>
-                    ))}
+                            <button
+                              onClick={() => {
+                                setImportPreview((prev: any) => prev!.filter((_: any, idx: number) => idx !== stdIdx));
+                              }}
+                              className="text-gray-300 hover:text-red-500 transition-colors ml-2 flex-shrink-0"
+                              title="Remove this standard"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+
+                          {/* Targets grouped by level */}
+                          <div className="px-4 py-3 space-y-3">
+                            {(["2.0", "3.0", "4.0"] as const).map((level) => {
+                              const lvl = LEVEL_COLORS[level];
+                              const targets = targetsByLevel[level] || [];
+                              return (
+                                <div key={level}>
+                                  <div className="flex items-center gap-2 mb-1.5">
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${lvl.bg} ${lvl.text} border border-current/20`}>
+                                      {level} — {lvl.label}
+                                    </span>
+                                    <span className="text-[10px] text-gray-400">{targets.length} target{targets.length !== 1 ? "s" : ""}</span>
+                                  </div>
+                                  <div className="space-y-1 ml-1">
+                                    {targets.map((target, tIdx) => (
+                                      <div key={target._editKey} className={`group flex items-start gap-2 px-2 py-1.5 rounded ${lvl.bg} border border-transparent hover:border-gray-200 transition-colors`}>
+                                        <span className="text-gray-400 text-xs mt-0.5 flex-shrink-0">•</span>
+                                        <input
+                                          type="text"
+                                          value={target.description}
+                                          onChange={(e) => {
+                                            setImportPreview((prev: any) => {
+                                              const updated = JSON.parse(JSON.stringify(prev));
+                                              const levelTargets = updated[stdIdx].learning_targets.filter((lt: any) => lt.level === level);
+                                              levelTargets[tIdx].description = e.target.value;
+                                              return updated;
+                                            });
+                                          }}
+                                          className={`flex-1 bg-transparent border-none outline-none text-xs ${lvl.text} placeholder-gray-400 focus:ring-0 p-0`}
+                                          placeholder="Describe the target..."
+                                        />
+                                        <button
+                                          onClick={() => {
+                                            setImportPreview((prev: any) => {
+                                              const updated = JSON.parse(JSON.stringify(prev));
+                                              // Find and remove this specific target
+                                              let levelCount = 0;
+                                              const idx = updated[stdIdx].learning_targets.findIndex((lt: any) => {
+                                                if (lt.level === level) {
+                                                  if (levelCount === tIdx) return true;
+                                                  levelCount++;
+                                                }
+                                                return false;
+                                              });
+                                              if (idx !== -1) updated[stdIdx].learning_targets.splice(idx, 1);
+                                              return updated;
+                                            });
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all flex-shrink-0"
+                                          title="Remove target"
+                                        >
+                                          <X size={12} />
+                                        </button>
+                                      </div>
+                                    ))}
+                                    {/* Add target button */}
+                                    <button
+                                      onClick={() => {
+                                        setImportPreview((prev: any) => {
+                                          const updated = JSON.parse(JSON.stringify(prev));
+                                          updated[stdIdx].learning_targets.push({
+                                            level,
+                                            description: "",
+                                          });
+                                          return updated;
+                                        });
+                                      }}
+                                      className="flex items-center gap-1 text-[10px] text-indigo-500 hover:text-indigo-700 font-medium ml-4 mt-0.5"
+                                    >
+                                      <PlusCircle size={10} /> Add target
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -656,7 +745,7 @@ export default function StandardsPage() {
                   </button>
                   <button
                     onClick={handleImportConfirm}
-                    disabled={importLoading}
+                    disabled={importLoading || importPreview.length === 0}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50 shadow-sm"
                   >
                     {importLoading && <Loader2 size={16} className="animate-spin" />}
