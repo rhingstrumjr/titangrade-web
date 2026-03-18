@@ -37,6 +37,7 @@ export interface Assignment {
   gc_coursework_id?: string | null;
   generated_key?: any;
   structured_rubric?: RubricCriterion[];
+  assessment_type?: 'formative' | 'summative';
   ai_cost?: number;
   created_at: string;
 }

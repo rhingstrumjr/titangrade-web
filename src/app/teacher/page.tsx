@@ -10,7 +10,7 @@ import { CreateAssignmentModal } from "@/components/dashboard/CreateAssignmentMo
 import { GoogleClassroomImportModal } from "@/components/dashboard/GoogleClassroomImportModal";
 import { PublishToGCModal } from "@/components/dashboard/PublishToGCModal";
 import type { Class, Assignment } from "@/types/dashboard";
-import { PlusCircle, Loader2 } from "lucide-react";
+import { PlusCircle, Loader2, Bell } from "lucide-react";
 
 export default function TeacherDashboard() {
   const router = useRouter();
@@ -33,6 +33,7 @@ export default function TeacherDashboard() {
   const [publishTargetAssignmentId, setPublishTargetAssignmentId] = useState<string | null>(null);
 
   const [isSyncingClasses, setIsSyncingClasses] = useState(false);
+  const [pendingReviewCount, setPendingReviewCount] = useState(0);
 
   useEffect(() => {
     checkUserAndFetchData();
@@ -54,12 +55,14 @@ export default function TeacherDashboard() {
 
   const fetchData = async () => {
     setIsLoading(true);
-    const [cRes, aRes] = await Promise.all([
+    const [cRes, aRes, pendingRes] = await Promise.all([
       supabase.from("classes").select("*").order("created_at", { ascending: true }),
-      supabase.from("assignments").select("*").order("created_at", { ascending: false })
+      supabase.from("assignments").select("*").order("created_at", { ascending: false }),
+      supabase.from("submissions").select("id", { count: 'exact', head: true }).eq("status", "graded").eq("manually_edited", false),
     ]);
     if (cRes.data) setClasses(cRes.data);
     if (aRes.data) setAssignments(aRes.data);
+    setPendingReviewCount(pendingRes.count ?? 0);
     setIsLoading(false);
   };
 
@@ -170,14 +173,21 @@ export default function TeacherDashboard() {
 
   // --- Assignments CRUD ---
 
-  const handleCreateAssignment = async (title: string, classIds: string[]) => {
+  const handleCreateAssignment = async (title: string, classIds: string[], assessmentType: 'formative' | 'summative') => {
+    const baseFields = {
+      title,
+      grading_framework: 'standard' as const,
+      max_score: 100,
+      max_attempts: 1,
+      feedback_release_mode: 'immediate' as const,
+      is_socratic: false,
+      rubric: '',
+      assessment_type: assessmentType,
+    };
+
     const inserts = classIds.length > 0
-      ? classIds.map(classId => ({
-          title, class_id: classId, grading_framework: 'standard', max_score: 100, max_attempts: 1, feedback_release_mode: 'immediate', is_socratic: false, rubric: ''
-        }))
-      : [{
-          title, class_id: selectedClassId || null, grading_framework: 'standard', max_score: 100, max_attempts: 1, feedback_release_mode: 'immediate', is_socratic: false, rubric: ''
-        }];
+      ? classIds.map(classId => ({ ...baseFields, class_id: classId }))
+      : [{ ...baseFields, class_id: selectedClassId || null }];
 
     const { data, error } = await supabase.from('assignments').insert(inserts).select();
 
@@ -185,7 +195,6 @@ export default function TeacherDashboard() {
       console.error("Error creating assignment:", error);
       alert("Failed to create assignment");
     } else if (data && data.length > 0) {
-      // Redirect to the first assignment created
       window.location.href = `/teacher/assignments/${data[0].id}`;
     }
   };
@@ -263,7 +272,15 @@ export default function TeacherDashboard() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Teacher Dashboard</h1>
-            <p className="text-gray-500 mt-1">Manage classes, assignments, and student submissions.</p>
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-gray-500">Manage classes, assignments, and student submissions.</p>
+              {pendingReviewCount > 0 && (
+                <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-full text-sm font-medium animate-pulse">
+                  <Bell size={14} />
+                  {pendingReviewCount} {pendingReviewCount === 1 ? 'submission needs' : 'submissions need'} review
+                </span>
+              )}
+            </div>
           </div>
           
           <div className="flex gap-3">

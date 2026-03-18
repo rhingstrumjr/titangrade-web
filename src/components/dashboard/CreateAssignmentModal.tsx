@@ -6,7 +6,7 @@ interface CreateAssignmentModalProps {
   classes: Class[];
   initialClassId: string | null;
   onClose: () => void;
-  onCreate: (title: string, classIds: string[]) => Promise<void>;
+  onCreate: (title: string, classIds: string[], assessmentType: 'formative' | 'summative') => Promise<void>;
 }
 
 export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
@@ -16,6 +16,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
   onCreate,
 }) => {
   const [newTitle, setNewTitle] = useState("");
+  const [assessmentType, setAssessmentType] = useState<'formative' | 'summative'>('summative');
   const [selectedClassesForNewAssignment, setSelectedClassesForNewAssignment] = useState<string[]>(
     initialClassId ? [initialClassId] : []
   );
@@ -26,8 +27,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
     if (!newTitle.trim()) return;
     
     setCreateLoading(true);
-    await onCreate(newTitle, selectedClassesForNewAssignment);
-    // onCreate will likely handle the redirect, so we don't necessarily set loading to false here unless it fails.
+    await onCreate(newTitle, selectedClassesForNewAssignment, assessmentType);
   };
 
   return (
@@ -47,6 +47,37 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
               placeholder="e.g. History Essay Draft 1"
               className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
+          </div>
+
+          {/* Assessment Type Toggle */}
+          <div>
+            <label className="block text-sm font-semibold mb-2 text-gray-700">Assessment Type</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setAssessmentType('summative')}
+                className={`flex-1 px-3 py-2 text-sm rounded-lg border font-medium transition-all ${
+                  assessmentType === 'summative'
+                    ? 'bg-indigo-50 border-indigo-300 text-indigo-700 ring-1 ring-indigo-200'
+                    : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <div className="font-semibold">Summative</div>
+                <div className="text-xs mt-0.5 opacity-75">Counts toward mastery</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAssessmentType('formative')}
+                className={`flex-1 px-3 py-2 text-sm rounded-lg border font-medium transition-all ${
+                  assessmentType === 'formative'
+                    ? 'bg-amber-50 border-amber-300 text-amber-700 ring-1 ring-amber-200'
+                    : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <div className="font-semibold">Formative</div>
+                <div className="text-xs mt-0.5 opacity-75">Practice / check-in</div>
+              </button>
+            </div>
           </div>
 
           <div>

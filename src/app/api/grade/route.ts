@@ -72,6 +72,46 @@ export async function POST(req: Request) {
     if (updateError) {
       console.error('Failed to update submission status:', updateError);
     }
+
+    // 3b. Write normalized scores to submission_scores table
+    // Delete existing scores first (idempotent for regrades)
+    await supabase.from('submission_scores').delete().eq('submission_id', submissionId);
+
+    if (result.CategoryScores && result.CategoryScores.length > 0) {
+      const scoreRows = result.CategoryScores.map((cs: { category: string; earned: number; possible: number }) => ({
+        submission_id: submissionId,
+        category_name: cs.category,
+        ai_score: cs.earned,
+        ai_possible: cs.possible,
+      }));
+      const { error: scoresErr } = await supabase.from('submission_scores').insert(scoreRows);
+      if (scoresErr) console.error('Failed to insert category scores:', scoresErr);
+    }
+
+    if (result.SkillAssessments && result.SkillAssessments.length > 0) {
+      // Attempt to match skills to linked assignment_targets
+      const { data: targets } = await supabase
+        .from('assignment_targets')
+        .select('*, learning_target:learning_targets(*)')
+        .eq('assignment_id', assignment.id);
+
+      const scoreRows = result.SkillAssessments.map((sa: { level: string; dimension: string; skill: string; status: string }) => {
+        const matchedTarget = targets?.find((t: any) =>
+          t.learning_target?.description === sa.skill &&
+          t.learning_target?.level === sa.level
+        );
+        const numericScore = sa.status === 'demonstrated' ? 1 : sa.status === 'partial' ? 0.5 : 0;
+        return {
+          submission_id: submissionId,
+          learning_target_id: matchedTarget?.learning_target_id || null,
+          category_name: `[${sa.level}] ${sa.dimension}: ${sa.skill}`,
+          ai_score: numericScore,
+          ai_possible: 1,
+        };
+      });
+      const { error: scoresErr } = await supabase.from('submission_scores').insert(scoreRows);
+      if (scoresErr) console.error('Failed to insert skill scores:', scoresErr);
+    }
     
     // Default to 'immediate' if not set
     const isImmediate = !assignment.feedback_release_mode || assignment.feedback_release_mode === 'immediate';
