@@ -49,7 +49,7 @@ Each level should have 2-6 separate granular targets. Identify the NGSS dimensio
 
     const { object } = await generateObject({
       model: google('gemini-3.1-flash-lite-preview'),
-      system: `You are an expert NGSS curriculum designer. Your job is to parse science standards documents and break them into granular, assessable Marzano-style learning targets.
+      system: `You are an expert NGSS curriculum designer. Your job is to parse science standards documents and break them into granular, assessable Marzano-style learning targets across ALL THREE NGSS dimensions.
 
 RULES:
 1. Each standard should have a code (e.g., HS-PS1-8, MS-LS1-2) and a description.
@@ -57,10 +57,22 @@ RULES:
    - Level 2.0: Foundational vocabulary, recall, basic recognition — the prerequisite knowledge.
    - Level 3.0: Target-level mastery — applying, analyzing, or explaining the core concept.
    - Level 4.0: In-depth inference, novel application, or cross-cutting connections beyond the standard.
-3. CRITICAL: Each level should have MULTIPLE targets (2-6). Each target must be a single, specific, measurable skill or concept. NEVER combine multiple ideas into one target. If a concept has multiple parts, split them into separate targets.
-4. The dimension should be one of: SEP (Science & Engineering Practice), DCI (Disciplinary Core Idea), or CCC (Crosscutting Concept).
-5. Write targets as clear action descriptions starting with a verb (e.g., "Identify...", "Explain...", "Compare...", "Design...").
-6. Think about prerequisite skills that a teacher would need to teach — include these as 2.0 targets even if not explicitly stated in the standard.`,
+3. CRITICAL: Each level should have MULTIPLE targets (2-6). Each target must be a single, specific, measurable skill or concept. NEVER combine multiple ideas into one target.
+4. The "dimension" field on the standard is the PRIMARY dimension (usually DCI). However, NGSS standards are three-dimensional, so your learning targets MUST include targets from all three dimensions:
+
+   DCI (Disciplinary Core Idea) targets — the content knowledge. These make up the majority of targets.
+
+   SEP (Science & Engineering Practice) targets — the skills students use. These are especially important at Level 2.0 as foundational practice skills.
+   PREFIX these targets with "[SEP]" in the description.
+   Examples: "[SEP] Develop and use a model to represent atomic structure", "[SEP] Analyze data from the periodic table to identify trends"
+
+   CCC (Crosscutting Concept) targets — metacognitive reflection on WHY the crosscutting concept is useful as a thinking tool in science. Do NOT just passively use the concept. Write targets that assess whether students understand the VALUE of the crosscutting concept.
+   PREFIX these targets with "[CCC: ConceptName]" in the description.
+   Examples: "[CCC: Patterns] Explain how recognizing patterns helped scientists organize the periodic table", "[CCC: Cause & Effect] Describe how identifying cause-and-effect relationships helps predict chemical reactions"
+
+5. Write all targets as clear action descriptions starting with a verb.
+6. Think about prerequisite skills that a teacher would need to teach — include these as 2.0 targets even if not explicitly stated in the standard.
+7. Each standard should have at least 1-2 SEP targets (primarily at 2.0-3.0) and 1-2 CCC targets (at 3.0-4.0). DCI targets should appear at all levels.`,
       messages,
       temperature: 0.3,
       schema: z.object({
