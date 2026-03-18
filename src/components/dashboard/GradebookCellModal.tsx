@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { X, Save, Star, Edit2, Loader2, FileText, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { X, Save, Star, Loader2, FileText, CheckCircle2, Clock, AlertCircle } from "lucide-react";
 import { CategoryBreakdown } from "@/components/submissions/CategoryBreakdown";
+import { createClient } from "@/utils/supabase/client";
+import type { SubmissionScore } from "@/types/standards";
+
+const supabase = createClient();
 
 interface GradebookCellModalProps {
   isOpen: boolean;
@@ -30,17 +34,36 @@ export const GradebookCellModal: React.FC<GradebookCellModalProps> = ({
   const [editFeedback, setEditFeedback] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // Normalized scores state
+  const [normalizedScores, setNormalizedScores] = useState<SubmissionScore[]>([]);
+  const [editNormalizedScores, setEditNormalizedScores] = useState<SubmissionScore[]>([]);
+  const [isLoadingScores, setIsLoadingScores] = useState(false);
+
   useEffect(() => {
     if (isOpen && anchorRect) {
       setShouldRender(true);
       setEditScore(submission?.score || "");
       setEditFeedback(submission?.feedback || "");
-      // Small delay to allow initial DOM render at anchor position before triggering CSS transition
       const timer = setTimeout(() => setIsExpanded(true), 10);
+
+      // Fetch normalized scores
+      if (submission?.id) {
+        setIsLoadingScores(true);
+        supabase
+          .from("submission_scores")
+          .select("*, learning_target:learning_targets(*)")
+          .eq("submission_id", submission.id)
+          .then(({ data }) => {
+            const scores = (data || []) as SubmissionScore[];
+            setNormalizedScores(scores);
+            setEditNormalizedScores(scores.map(s => ({ ...s })));
+            setIsLoadingScores(false);
+          });
+      }
+
       return () => clearTimeout(timer);
     } else {
       setIsExpanded(false);
-      // Wait for CSS transition to finish before removing from DOM
       const timer = setTimeout(() => setShouldRender(false), 300);
       return () => clearTimeout(timer);
     }
@@ -48,6 +71,20 @@ export const GradebookCellModal: React.FC<GradebookCellModalProps> = ({
 
   const handleSave = async () => {
     setIsSaving(true);
+
+    // Save teacher overrides to submission_scores
+    if (editNormalizedScores.length > 0) {
+      for (const sc of editNormalizedScores) {
+        const original = normalizedScores.find(o => o.id === sc.id);
+        if (original && sc.teacher_override_score !== original.teacher_override_score) {
+          await supabase
+            .from("submission_scores")
+            .update({ teacher_override_score: sc.teacher_override_score })
+            .eq("id", sc.id);
+        }
+      }
+    }
+
     await onSave(editScore, editFeedback);
     setIsSaving(false);
     onClose();
@@ -55,7 +92,6 @@ export const GradebookCellModal: React.FC<GradebookCellModalProps> = ({
 
   if (!shouldRender || !anchorRect) return null;
 
-  // Calculate expanded position (centered)
   const expandedWidth = 450;
   const expandedHeight = 500;
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1000;
@@ -165,8 +201,20 @@ export const GradebookCellModal: React.FC<GradebookCellModalProps> = ({
                 />
               </div>
               
-              {/* Category Breakdown if applicable */}
-              <CategoryBreakdown sub={submission} />
+              {/* Category Breakdown — normalized + legacy fallback */}
+              {isLoadingScores ? (
+                <div className="flex items-center justify-center py-4 text-gray-400 text-xs">
+                  <Loader2 size={12} className="animate-spin mr-1" /> Loading scores...
+                </div>
+              ) : (
+                <CategoryBreakdown
+                  sub={submission}
+                  normalizedScores={normalizedScores}
+                  isEditing={true}
+                  editNormalizedScores={editNormalizedScores}
+                  setEditNormalizedScores={setEditNormalizedScores}
+                />
+              )}
 
             </div>
 

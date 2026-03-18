@@ -3,8 +3,9 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { Loader2, ArrowLeft, Table as TableIcon } from "lucide-react";
+import { Loader2, ArrowLeft, Table as TableIcon, Target } from "lucide-react";
 import { GradebookCellModal } from "@/components/dashboard/GradebookCellModal";
+import { StandardsHeatmap } from "@/components/gradebook/StandardsHeatmap";
 
 export default function GradebookPage() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function GradebookPage() {
   // Bulk Selection State
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [isCreating, setIsCreating] = useState(false);
+  const [gradebookView, setGradebookView] = useState<'assignments' | 'targets'>('assignments');
 
   useEffect(() => {
     async function fetchData() {
@@ -286,10 +288,27 @@ export default function GradebookPage() {
               Gradebook: {classData?.name}
             </h1>
           </div>
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setGradebookView('assignments')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${gradebookView === 'assignments' ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <TableIcon size={14} /> By Assignment
+            </button>
+            <button
+              onClick={() => setGradebookView('targets')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${gradebookView === 'targets' ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <Target size={14} /> By Learning Target
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="flex-grow w-full overflow-x-auto relative">
+        {gradebookView === 'targets' ? (
+          <StandardsHeatmap classId={classId} students={students} />
+        ) : (
         <div className="inline-block min-w-full bg-white relative">
           
           <table className="text-left border-collapse w-full">
@@ -436,6 +455,7 @@ export default function GradebookPage() {
           </table>
           
         </div>
+        )}
       </main>
 
       {/* Bulk Action Bar */}

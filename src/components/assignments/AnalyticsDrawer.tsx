@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, BarChart3, AlertTriangle, Lightbulb, Loader2, TrendingDown, TrendingUp, Users, CheckCircle2 } from "lucide-react";
+import { X, BarChart3, AlertTriangle, Lightbulb, Loader2, TrendingDown, TrendingUp, Users, CheckCircle2, Bookmark } from "lucide-react";
 import type { Submission } from "@/types/submission";
 
 interface AnalyticsDrawerProps {
@@ -28,6 +28,8 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
   const [reteachCost, setReteachCost] = useState<number>(0);
   const [selectedTroubleSpots, setSelectedTroubleSpots] = useState<Set<string>>(new Set());
   const [hasAutoSelected, setHasAutoSelected] = useState(false);
+  const [isSavingToBank, setIsSavingToBank] = useState(false);
+  const [savedToBank, setSavedToBank] = useState(false);
 
   // Reset state when drawer opens 
   useEffect(() => {
@@ -36,6 +38,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
       setSelectedTroubleSpots(new Set());
       setReteachPlan(null);
       setReteachCost(0);
+      setSavedToBank(false);
     }
   }, [isOpen]);
 
@@ -466,6 +469,48 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
                   if (line.trim() === "") return <br key={i} />;
                   return <p key={i} className="mb-1">{line}</p>;
                 })}
+              </div>
+              <div className="flex items-center gap-2 mt-4 pt-3 border-t border-indigo-200">
+                <button
+                  onClick={async () => {
+                    setIsSavingToBank(true);
+                    try {
+                      const res = await fetch('/api/intervention-bank', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          description: reteachPlan,
+                        }),
+                      });
+                      const data = await res.json();
+                      if (data.success) {
+                        setSavedToBank(true);
+                      } else {
+                        alert('Failed to save: ' + (data.error || 'Unknown error'));
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      alert('Error saving to intervention bank.');
+                    }
+                    setIsSavingToBank(false);
+                  }}
+                  disabled={isSavingToBank || savedToBank}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors shadow-sm disabled:opacity-50"
+                  style={{
+                    backgroundColor: savedToBank ? '#ecfdf5' : '#fff',
+                    borderColor: savedToBank ? '#6ee7b7' : '#c7d2fe',
+                    color: savedToBank ? '#047857' : '#4338ca',
+                  }}
+                >
+                  {isSavingToBank ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : savedToBank ? (
+                    <CheckCircle2 size={12} />
+                  ) : (
+                    <Bookmark size={12} />
+                  )}
+                  {savedToBank ? 'Saved to Bank' : isSavingToBank ? 'Saving...' : 'Save to Intervention Bank'}
+                </button>
               </div>
             </div>
           )}
