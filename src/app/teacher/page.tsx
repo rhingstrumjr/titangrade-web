@@ -10,7 +10,7 @@ import { CreateAssignmentModal } from "@/components/dashboard/CreateAssignmentMo
 import { GoogleClassroomImportModal } from "@/components/dashboard/GoogleClassroomImportModal";
 import { PublishToGCModal } from "@/components/dashboard/PublishToGCModal";
 import type { Class, Assignment } from "@/types/dashboard";
-import { PlusCircle, Loader2, Bell, BookOpen } from "lucide-react";
+import { PlusCircle, Loader2, Bell, BookOpen, Settings } from "lucide-react";
 
 export default function TeacherDashboard() {
   const router = useRouter();
@@ -316,6 +316,12 @@ export default function TeacherDashboard() {
               className="bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 px-4 py-2 rounded-lg font-medium transition-colors shadow-sm flex items-center gap-2"
             >
               <BookOpen size={18} /> Standards
+            </button>
+            <button
+              onClick={() => router.push("/teacher/settings")}
+              className="bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 px-3 py-2 rounded-lg font-medium transition-colors shadow-sm flex items-center gap-2"
+            >
+              <Settings size={18} />
             </button>
             <button
               onClick={() => setIsCreatingAssignment(true)}
