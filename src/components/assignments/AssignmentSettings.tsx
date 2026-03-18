@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Settings, Save, Loader2, Sparkles } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { RubricBuilder } from "@/components/RubricBuilder";
+import { EvaluationMatrix } from "@/components/assignments/EvaluationMatrix";
 import { AnswerKeyEditor } from "@/app/teacher/AnswerKeyEditor";
 import type { RubricCriterion } from "@/types/submission";
 
@@ -521,6 +522,19 @@ export function AssignmentSettings({ assignment, onUpdate }: AssignmentSettingsP
             <RubricBuilder criteria={structuredCriteria} onChange={setStructuredCriteria} />
           </div>
         </div>
+
+        {/* ── Evaluation Matrix (Marzano only) ── */}
+        {framework === "marzano" && (
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
+              Evaluation Matrix — Linked Learning Targets
+            </label>
+            <p className="text-xs text-gray-500 mb-3">
+              Select which standards/targets the AI should evaluate for this assignment.
+            </p>
+            <EvaluationMatrix assignmentId={assignment.id} />
+          </div>
+        )}
 
         {/* ── Exemplar Upload ── */}
         <div>
