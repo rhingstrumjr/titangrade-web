@@ -53,16 +53,32 @@ Each level should have 2-6 separate granular targets. Identify the NGSS dimensio
 
 RULES:
 1. Each standard should have a code (e.g., HS-PS1-8, MS-LS1-2) and a description.
-2. Each standard must have learning targets at 3 levels:
-   - Level 2.0: Foundational vocabulary, recall, basic recognition — the prerequisite knowledge.
-   - Level 3.0: Target-level mastery — applying, analyzing, or explaining the core concept.
-   - Level 4.0: In-depth inference, novel application, or cross-cutting connections beyond the standard.
+2. Each standard must have learning targets at 3 Marzano proficiency levels. The level distinction is CRITICAL:
+
+   Level 2.0 — PREREQUISITE KNOWLEDGE:
+   Foundational vocabulary, recall, basic definitions, and basic practice skills that students need BEFORE they can tackle the standard. These are the building blocks.
+   Verbs: Define, identify, label, list, recognize, recall, describe (basic)
+   Example: "Define proton, neutron, and electron" or "[SEP] Read and interpret a simple data table"
+
+   Level 3.0 — IS THE STANDARD:
+   Targets at this level must DIRECTLY MIRROR the Performance Expectation. Same scope, same context, same cognitive demand as what the PE literally asks students to do. If the PE says "use a model to explain X", then a 3.0 target is "Use a model to explain X." This level means the student has achieved the standard.
+   Verbs: Explain, analyze, model, construct an explanation, compare, describe (complex), use evidence to support
+   Example: "Use a model to explain how the substructure of atoms determines the properties of elements"
+
+   Level 4.0 — BEYOND THE STANDARD (Transfer):
+   Targets here require a FUNDAMENTALLY DIFFERENT TYPE OF THINKING — not just a harder version of 3.0. There are two pathways:
+   (a) INFERENCE & TRANSFER: Apply the concept to an unfamiliar context, make predictions about novel situations, connect to other standards
+   (b) ENGINEERING APPLICATION: Design a solution, create an experiment, or solve a real-world problem using the standard's content
+   NEVER write a 4.0 that is just 3.0 with bigger words. It must require transfer or creation.
+   Verbs: Predict, design, evaluate, hypothesize, create, critique, propose, justify in a novel context
+   Example: "Predict the chemical properties of a hypothetical element based on its position in the periodic table" or "Design an experiment to classify an unknown substance using knowledge of atomic structure"
+
 3. CRITICAL: Each level should have MULTIPLE targets (2-6). Each target must be a single, specific, measurable skill or concept. NEVER combine multiple ideas into one target.
 4. The "dimension" field on the standard is the PRIMARY dimension (usually DCI). However, NGSS standards are three-dimensional, so your learning targets MUST include targets from all three dimensions:
 
    DCI (Disciplinary Core Idea) targets — the content knowledge. These make up the majority of targets.
 
-   SEP (Science & Engineering Practice) targets — the skills students use. These are especially important at Level 2.0 as foundational practice skills.
+   SEP (Science & Engineering Practice) targets — the skills students use. These are especially important at Level 2.0 as foundational practice skills and at Level 4.0 as engineering design challenges.
    PREFIX these targets with "[SEP]" in the description.
    Examples: "[SEP] Develop and use a model to represent atomic structure", "[SEP] Analyze data from the periodic table to identify trends"
 
@@ -72,7 +88,7 @@ RULES:
 
 5. Write all targets as clear action descriptions starting with a verb.
 6. Think about prerequisite skills that a teacher would need to teach — include these as 2.0 targets even if not explicitly stated in the standard.
-7. Each standard should have at least 1-2 SEP targets (primarily at 2.0-3.0) and 1-2 CCC targets (at 3.0-4.0). DCI targets should appear at all levels.`,
+7. Each standard should have at least 1-2 SEP targets (primarily at 2.0 and 4.0) and 1-2 CCC targets (at 3.0-4.0). DCI targets should appear at all levels.`,
       messages,
       temperature: 0.3,
       schema: z.object({
